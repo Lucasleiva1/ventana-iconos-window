@@ -1,6 +1,26 @@
 # Changelog
 
-## 0.2.0 — pendiente de publicación
+## 0.2.1 — 2026-09-05
+
+### Agregado
+
+- Actualizador integrado en el Administrador con búsqueda, progreso, confirmación
+  e instalación dentro de la propia interfaz.
+- Carpeta física diferenciada `Documentos\Desktop Organizer\Dock - Accesos`,
+  reconstrucción automática desde su contenido y metadata oculta portable con
+  identidad, nombres, separadores y orden.
+- Prioridad visual equivalente a la barra de tareas: la uñita permanece sobre
+  ventanas normales y queda detrás de aplicaciones fullscreen del mismo monitor.
+
+### Cambiado
+
+- Los elementos arrastrados desde el Escritorio al Dock se mueven a su carpeta
+  física. Para orígenes externos se copia el acceso o se crea un `.lnk`, sin
+  mover el original.
+- Quitar un elemento del Dock ahora lo restaura al Escritorio y nunca
+  sobrescribe un nombre existente.
+
+## 0.2.0 — 2026-09-05
 
 ### Agregado
 
@@ -9,13 +29,12 @@
   tirador, `Esc`, System Tray o Administrador. El hover nunca lo abre; no hay
   hot edge ni hot corner.
 - Accesos a programas, accesos directos `.lnk`, carpetas y archivos arrastrados
-  desde el Explorador de Windows. El elemento original nunca se mueve ni se copia.
+  desde el Explorador de Windows.
 - Un clic abre el elemento con la aplicación predeterminada de Windows; las
   carpetas se abren en el Explorador.
 - Reordenamiento por arrastre con orden persistente y distinción entre clic y
   arrastre.
-- Menú por elemento con Abrir, Abrir ubicación y Quitar del Dock. Quitar nunca
-  borra ni mueve el archivo real.
+- Menú por elemento con Abrir, Abrir ubicación y Quitar del Dock.
 - Preferencia «Ocultar Dock después de abrir un elemento», activada por defecto.
 - Sección DOCK en el Administrador: activar, monitor, tamaño de iconos,
   opacidad, mostrar, ocultar y reubicar.
@@ -28,7 +47,6 @@
 - Shortcut global opcional y configurable para mostrar u ocultar el Dock, con mensaje explícito si la combinación está ocupada.
 - Color de fondo, radio de borde, blur opcional, tres niveles de animación y modo rendimiento.
 - Feedback explícito de destino durante el reordenamiento.
-
 ### Cambiado
 
 - `schemaVersion` pasa de 5 a 6. Los saves de Parte 5 y de `v0.1.0` se migran solos y

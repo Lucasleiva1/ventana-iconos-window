@@ -140,6 +140,11 @@ pub fn open_drawers_root() -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn open_dock_root() -> Result<(), String> {
+    ShellService::open(&StorageService::paths()?.dock)
+}
+
+#[tauri::command]
 pub fn get_preferences(app: AppHandle, state: State<'_, AppState>) -> Result<Preferences, String> {
     let mut preferences = state.snapshot()?.preferences;
     preferences.start_with_windows = app

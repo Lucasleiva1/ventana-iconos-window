@@ -1,6 +1,6 @@
 [package]
 name = "desktop-organizer"
-version = "0.2.0"
+version = "0.2.1"
 description = "Organizador visual del escritorio de Windows"
 authors = ["Desktop Organizer"]
 edition = "2024"
@@ -24,6 +24,7 @@ tauri-plugin-autostart = "2"
 tauri-plugin-dialog = "2.7"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
 uuid = { version = "1", features = ["v4"] }
 windows = { version = "0.61", features = [
   "Win32_Foundation",

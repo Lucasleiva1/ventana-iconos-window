@@ -1,5 +1,6 @@
 mod commands;
 mod dock_commands;
+mod dock_repository;
 mod dock_service;
 mod icon_service;
 mod item_repository;
@@ -40,6 +41,7 @@ pub fn run() {
             Some(vec!["--autostart"]),
         ))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -98,6 +100,12 @@ pub fn run() {
                 item_repository::sync_drawer(drawer, startup_now).map_err(std::io::Error::other)?;
                 monitor_service::normalize_drawer(drawer, &monitors);
             }
+            let dock_warnings =
+                dock_repository::reconcile_startup(&mut persisted.dock, &storage, startup_now)
+                    .map_err(std::io::Error::other)?;
+            for warning in dock_warnings {
+                eprintln!("{warning}");
+            }
             if !should_offer_disk_recovery {
                 PersistenceService::save(&app_handle, &persisted).map_err(std::io::Error::other)?;
             }
@@ -120,6 +128,7 @@ pub fn run() {
             // El Dock siempre arranca escondido: al iniciar sólo se ve el tirador.
             persisted.dock.visible = false;
             app.manage(AppState::new(persisted.clone(), startup_notice));
+            dock_service::start_fullscreen_guard(&app_handle);
             if let Err(error) = shortcut_service::register_config(&app_handle, &persisted.dock) {
                 eprintln!("No se pudo registrar el shortcut del Dock al iniciar: {error}");
             }
@@ -205,6 +214,7 @@ pub fn run() {
             commands::get_monitors,
             commands::get_storage_info,
             commands::open_drawers_root,
+            commands::open_dock_root,
             commands::get_preferences,
             commands::update_preferences,
             commands::get_recovery_status,

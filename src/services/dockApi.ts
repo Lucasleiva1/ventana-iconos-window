@@ -29,6 +29,7 @@ export const dockApi = {
   openItemLocation: (itemId: string) =>
     invoke<void>("open_dock_item_location", { itemId }),
   refreshAvailability: () => invoke<DockState>("refresh_dock_availability"),
+  openFolder: () => invoke<void>("open_dock_root"),
   relayout: () => invoke<DockState>("relayout_dock"),
   /** Reutiliza la caché de iconos del proceso: nunca vuelve a extraer el mismo. */
   getItemIcon: (itemId: string, iconKey: string) => {

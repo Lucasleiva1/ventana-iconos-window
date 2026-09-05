@@ -29,9 +29,11 @@ use crate::model::Drawer;
 
 pub const APP_FOLDER_NAME: &str = "Desktop Organizer";
 pub const DRAWERS_FOLDER_NAME: &str = "Cajones";
+pub const DOCK_FOLDER_NAME: &str = "Dock - Accesos";
 pub const BACKUPS_FOLDER_NAME: &str = "Backups";
 pub const MASTER_SAVE_NAME: &str = "desktop-organizer-save.json";
 pub const DRAWER_METADATA_NAME: &str = ".drawer.json";
+pub const DOCK_METADATA_NAME: &str = ".dock.json";
 const TRANSFER_PREFIX: &str = ".desktop-organizer-transfer-";
 const DRAWER_METADATA_VERSION: u32 = 1;
 
@@ -41,6 +43,7 @@ pub struct StoragePaths {
     pub desktop: PathBuf,
     pub root: PathBuf,
     pub drawers: PathBuf,
+    pub dock: PathBuf,
     pub backups: PathBuf,
     pub master_save: PathBuf,
 }
@@ -52,6 +55,7 @@ pub struct StoragePathsInfo {
     pub desktop: PathBuf,
     pub root: PathBuf,
     pub drawers: PathBuf,
+    pub dock: PathBuf,
     pub master_save: PathBuf,
 }
 
@@ -62,6 +66,7 @@ impl From<&StoragePaths> for StoragePathsInfo {
             desktop: paths.desktop.clone(),
             root: paths.root.clone(),
             drawers: paths.drawers.clone(),
+            dock: paths.dock.clone(),
             master_save: paths.master_save.clone(),
         }
     }
@@ -99,6 +104,7 @@ impl StorageService {
         Ok(StoragePaths {
             desktop,
             drawers: root.join(DRAWERS_FOLDER_NAME),
+            dock: root.join(DOCK_FOLDER_NAME),
             backups: root.join(BACKUPS_FOLDER_NAME),
             master_save: root.join(MASTER_SAVE_NAME),
             documents,
@@ -109,6 +115,8 @@ impl StorageService {
     pub fn ensure_layout(paths: &StoragePaths) -> Result<(), String> {
         fs::create_dir_all(&paths.drawers)
             .map_err(|error| format!("No se pudo crear {}: {error}", paths.drawers.display()))?;
+        fs::create_dir_all(&paths.dock)
+            .map_err(|error| format!("No se pudo crear {}: {error}", paths.dock.display()))?;
         fs::create_dir_all(&paths.backups)
             .map_err(|error| format!("No se pudo crear {}: {error}", paths.backups.display()))
     }
@@ -435,6 +443,42 @@ impl StorageService {
         Ok(TransferOutcome { warning })
     }
 
+    /// Copia sin sobrescribir y confirma primero un nombre temporal. El origen
+    /// sólo se lee y permanece intacto.
+    pub fn copy_safely(source: &Path, destination: &Path) -> Result<(), String> {
+        if destination.exists() {
+            return Err(format!(
+                "Ya existe “{}” en el destino. No se sobrescribió nada.",
+                destination
+                    .file_name()
+                    .unwrap_or(destination.as_os_str())
+                    .to_string_lossy()
+            ));
+        }
+        if !source.exists() {
+            return Err("El elemento de origen ya no existe".to_owned());
+        }
+        let parent = destination
+            .parent()
+            .ok_or_else(|| "El destino no tiene una carpeta válida".to_owned())?;
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("No se pudo preparar el destino: {error}"))?;
+        let staging = parent.join(format!("{TRANSFER_PREFIX}{}", Uuid::new_v4()));
+        if let Err(error) = copy_entry_verified(source, &staging) {
+            cleanup_staging(&staging, parent);
+            return Err(format!(
+                "La copia no terminó correctamente; el origen permanece intacto. {error}"
+            ));
+        }
+        if let Err(error) = fs::rename(&staging, destination) {
+            cleanup_staging(&staging, parent);
+            return Err(format!(
+                "No se pudo confirmar el destino; el origen permanece intacto. {error}"
+            ));
+        }
+        Ok(())
+    }
+
     pub fn is_desktop_item(path: &Path, desktop: &Path) -> bool {
         comparable_path(path) != comparable_path(desktop) && is_within(path, desktop)
     }
@@ -443,6 +487,13 @@ impl StorageService {
         let value = name.to_string_lossy();
         value.eq_ignore_ascii_case(DRAWER_METADATA_NAME)
             || value.starts_with(&format!("{DRAWER_METADATA_NAME}."))
+            || value.starts_with(TRANSFER_PREFIX)
+    }
+
+    pub fn is_dock_internal_file_name(name: &OsStr) -> bool {
+        let value = name.to_string_lossy();
+        value.eq_ignore_ascii_case(DOCK_METADATA_NAME)
+            || value.starts_with(&format!("{DOCK_METADATA_NAME}."))
             || value.starts_with(TRANSFER_PREFIX)
     }
 }
@@ -587,7 +638,7 @@ fn known_folder(id: &GUID) -> Result<PathBuf, String> {
         .map_err(|error| format!("Windows devolvió una ruta no válida: {error}"))
 }
 
-fn set_hidden(path: &Path) -> Result<(), String> {
+pub(crate) fn set_hidden(path: &Path) -> Result<(), String> {
     let wide = to_wide(path.as_os_str());
     let attributes = unsafe { GetFileAttributesW(PCWSTR(wide.as_ptr())) };
     if attributes == INVALID_FILE_ATTRIBUTES {
@@ -605,7 +656,7 @@ fn set_hidden(path: &Path) -> Result<(), String> {
     .map_err(|error| format!("No se pudo ocultar la metadata interna: {error}"))
 }
 
-fn write_synced(path: &Path, bytes: &[u8]) -> Result<(), String> {
+pub(crate) fn write_synced(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let file = fs::File::create(path)
         .map_err(|error| format!("No se pudo crear {}: {error}", path.display()))?;
     let mut writer = BufWriter::new(file);
@@ -798,6 +849,7 @@ mod tests {
             documents,
             desktop,
             drawers: app_root.join("Cajones"),
+            dock: app_root.join("Dock - Accesos"),
             backups: app_root.join("Backups"),
             master_save: app_root.join("desktop-organizer-save.json"),
             root: app_root,

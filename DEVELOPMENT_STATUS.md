@@ -18,19 +18,17 @@ MÓDULO CAJONES — COMPLETO
 PARTE 5 — COMPLETADA
 Dock retráctil funcional
 
-PARTE 6 — IMPLEMENTADA, RELEASE BLOQUEADA
+PARTE 6 — COMPLETADA
 Dock avanzado + estabilización
 
-MÓDULO DOCK — IMPLEMENTADO
-Validación final del Tray pendiente
+MÓDULO DOCK — COMPLETO
 
 PARTE 7 — PENDIENTE
 Paneles organizadores adaptativos
 ```
 
-La versión `0.2.0` está compilada, firmada e instalada para prueba. No se
-creó tag ni GitHub Release porque el bug conocido de iconos fantasma del Tray
-tras cierres forzados sigue documentado en `PENDIENTE-ICONO-BANDEJA.md`.
+La versión `0.2.1` incorpora el actualizador integrado, almacenamiento físico
+del Dock y prioridad visual compatible con fullscreen.
 
 ## Qué entró en la Parte 5
 
@@ -41,7 +39,8 @@ tras cierres forzados sigue documentado en `PENDIENTE-ICONO-BANDEJA.md`.
 - Posicionamiento sobre el área útil real del monitor, correcto a cualquier DPI
   y con la barra de tareas en cualquier borde.
 - Accesos a programas, `.lnk`, carpetas y archivos arrastrados desde Windows.
-  El Dock nunca mueve ni copia el original.
+  El Dock usa `Documentos\Desktop Organizer\Dock - Accesos`: mueve allí lo
+  que viene del Escritorio y crea o copia accesos para orígenes externos.
 - Reordenamiento por arrastre con orden persistente, tamaños de icono,
   opacidad, selección de monitor y scroll horizontal.
 - `schemaVersion` 5 con migración automática desde el esquema 4 de `v0.1.0`.

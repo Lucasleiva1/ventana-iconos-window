@@ -121,6 +121,7 @@ export interface StoragePathsInfo {
   desktop: string;
   root: string;
   drawers: string;
+  dock: string;
   masterSave: string;
 }
 

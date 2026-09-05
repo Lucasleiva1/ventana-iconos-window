@@ -14,8 +14,11 @@
 //! real del monitor (que Windows ya entrega sin la barra de tareas) y del
 //! `scale_factor` de ese monitor, de modo que el resultado es correcto a
 //! cualquier DPI y con la barra de tareas en cualquier borde.
+//! La prioridad visual replica a la barra de tareas: queda sobre ventanas
+//! normales, pero baja detrás de una aplicación fullscreen del mismo monitor.
 
 use std::{
+    mem::size_of,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     thread,
     time::Duration,
@@ -24,6 +27,13 @@ use std::{
 use tauri::{
     AppHandle, Manager, Monitor, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
+};
+use windows::Win32::{
+    Foundation::{HWND, RECT},
+    Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow},
+    UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId, IsIconic, IsWindowVisible,
+    },
 };
 
 use crate::{
@@ -55,6 +65,10 @@ static VISIBILITY_EPOCH: AtomicU64 = AtomicU64::new(0);
 /// aplicación quedaba trabada con ventanas duplicadas y sin posicionar.
 static WINDOWS_READY: AtomicBool = AtomicBool::new(false);
 
+/// Un solo observador de pantalla completa por proceso.
+static FULLSCREEN_GUARD_STARTED: AtomicBool = AtomicBool::new(false);
+static FOREGROUND_FULLSCREEN: AtomicBool = AtomicBool::new(false);
+
 /// El arranque terminó: ya es seguro tocar las ventanas desde los comandos.
 pub fn mark_ready() {
     WINDOWS_READY.store(true, Ordering::SeqCst);
@@ -62,6 +76,98 @@ pub fn mark_ready() {
 
 pub fn is_ready() -> bool {
     WINDOWS_READY.load(Ordering::SeqCst)
+}
+
+/// Mantiene la misma regla visual de la barra de tareas sin tomar el foco:
+/// topmost sobre ventanas normales y por debajo de fullscreen.
+pub fn start_fullscreen_guard(app: &AppHandle) {
+    if FULLSCREEN_GUARD_STARTED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let watched_app = app.clone();
+    thread::spawn(move || {
+        loop {
+            thread::sleep(Duration::from_millis(250));
+            let fullscreen = foreground_covers_handle_monitor(&watched_app);
+            let previous = FOREGROUND_FULLSCREEN.swap(fullscreen, Ordering::SeqCst);
+            if previous == fullscreen {
+                continue;
+            }
+            let callback_app = watched_app.clone();
+            if watched_app
+                .run_on_main_thread(move || apply_taskbar_priority(&callback_app, fullscreen))
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
+}
+
+fn sync_taskbar_priority(app: &AppHandle) -> bool {
+    let fullscreen = foreground_covers_handle_monitor(app);
+    FOREGROUND_FULLSCREEN.store(fullscreen, Ordering::SeqCst);
+    apply_taskbar_priority(app, fullscreen);
+    fullscreen
+}
+
+fn apply_taskbar_priority(app: &AppHandle, fullscreen: bool) {
+    let topmost = !fullscreen;
+    for label in [DOCK_WINDOW, DOCK_HANDLE_WINDOW] {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.set_always_on_top(topmost);
+        }
+    }
+}
+
+fn foreground_covers_handle_monitor(app: &AppHandle) -> bool {
+    let Some(handle) = app.get_webview_window(DOCK_HANDLE_WINDOW) else {
+        return false;
+    };
+    let Ok(handle_hwnd) = handle.hwnd() else {
+        return false;
+    };
+    let foreground = unsafe { GetForegroundWindow() };
+    if foreground == HWND::default()
+        || foreground == handle_hwnd
+        || !unsafe { IsWindowVisible(foreground) }.as_bool()
+        || unsafe { IsIconic(foreground) }.as_bool()
+    {
+        return false;
+    }
+
+    let mut foreground_process = 0_u32;
+    unsafe { GetWindowThreadProcessId(foreground, Some(&mut foreground_process)) };
+    if foreground_process == std::process::id() {
+        return false;
+    }
+
+    let foreground_monitor = unsafe { MonitorFromWindow(foreground, MONITOR_DEFAULTTONEAREST) };
+    let handle_monitor = unsafe { MonitorFromWindow(handle_hwnd, MONITOR_DEFAULTTONEAREST) };
+    if foreground_monitor != handle_monitor {
+        return false;
+    }
+
+    let mut window_rect = RECT::default();
+    if unsafe { GetWindowRect(foreground, &mut window_rect) }.is_err() {
+        return false;
+    }
+    let mut monitor_info = MONITORINFO {
+        cbSize: u32::try_from(size_of::<MONITORINFO>()).unwrap_or(u32::MAX),
+        ..Default::default()
+    };
+    if !unsafe { GetMonitorInfoW(foreground_monitor, &mut monitor_info) }.as_bool() {
+        return false;
+    }
+    rect_covers_monitor(window_rect, monitor_info.rcMonitor)
+}
+
+fn rect_covers_monitor(window: RECT, monitor: RECT) -> bool {
+    const TOLERANCE: i32 = 2;
+    window.left <= monitor.left + TOLERANCE
+        && window.top <= monitor.top + TOLERANCE
+        && window.right >= monitor.right - TOLERANCE
+        && window.bottom >= monitor.bottom - TOLERANCE
 }
 
 /// Tamaño lógico del Dock: crece con el contenido hasta el ancho disponible.
@@ -396,6 +502,7 @@ pub fn refresh(app: &AppHandle, dock: &mut DockState, animate_hide: bool) -> Res
 
     ensure_windows(app, dock)?;
     layout(app, dock)?;
+    let fullscreen = sync_taskbar_priority(app);
 
     if let Some(handle) = app.get_webview_window(DOCK_HANDLE_WINDOW)
         && !handle.is_visible().unwrap_or(false)
@@ -419,8 +526,7 @@ pub fn refresh(app: &AppHandle, dock: &mut DockState, animate_hide: bool) -> Res
             .map_err(|error| format!("No se pudo mostrar el Dock: {error}"))?;
         // Sólo tomamos el foco al aparecer. Si ya estaba abierto no se lo
         // robamos al programa que el usuario acaba de lanzar desde el Dock.
-        if !was_visible {
-            let _ = window.set_always_on_top(true);
+        if !was_visible && !fullscreen {
             let _ = window.set_focus();
         }
     } else if animate_hide && window.is_visible().unwrap_or(false) {
@@ -447,15 +553,18 @@ pub fn relayout(app: &AppHandle, dock: &mut DockState) -> Result<(), String> {
         return Ok(());
     }
     ensure_windows(app, dock)?;
-    layout(app, dock)
+    layout(app, dock)?;
+    sync_taskbar_priority(app);
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
-    use super::{aligned_dock_x, logical_size};
+    use super::{aligned_dock_x, logical_size, rect_covers_monitor};
     use crate::model::{DockItem, DockItemKind, DockState, DockWidthMode, DrawerItemType};
+    use windows::Win32::Foundation::RECT;
 
     fn item(index: u32, kind: DockItemKind) -> DockItem {
         DockItem {
@@ -530,5 +639,50 @@ mod tests {
     #[test]
     fn dock_stays_fully_visible_at_the_right_edge() {
         assert_eq!(aligned_dock_x(1862, 58, 480, 0, 1920), 1440);
+    }
+
+    #[test]
+    fn fullscreen_rect_covers_the_monitor() {
+        let monitor = RECT {
+            left: 0,
+            top: 0,
+            right: 1920,
+            bottom: 1080,
+        };
+        assert!(rect_covers_monitor(monitor, monitor));
+    }
+
+    #[test]
+    fn maximized_window_that_leaves_taskbar_visible_is_not_fullscreen() {
+        let window = RECT {
+            left: -1,
+            top: -1,
+            right: 1921,
+            bottom: 1041,
+        };
+        let monitor = RECT {
+            left: 0,
+            top: 0,
+            right: 1920,
+            bottom: 1080,
+        };
+        assert!(!rect_covers_monitor(window, monitor));
+    }
+
+    #[test]
+    fn fullscreen_detection_accepts_small_border_rounding() {
+        let window = RECT {
+            left: 1,
+            top: 1,
+            right: 1919,
+            bottom: 1079,
+        };
+        let monitor = RECT {
+            left: 0,
+            top: 0,
+            right: 1920,
+            bottom: 1080,
+        };
+        assert!(rect_covers_monitor(window, monitor));
     }
 }

@@ -1,7 +1,6 @@
 # Validación de Desktop Organizer
 
-Estado actual: `v0.2.0` implementada, compilada e instalada para prueba.
-Publicación bloqueada por el pendiente conocido del Tray.
+Estado actual: `v0.2.1` implementada y en preparación de Release.
 
 Este documento registra pruebas reales y límites del entorno usado para cerrar la versión.
 
@@ -13,7 +12,7 @@ Este documento registra pruebas reales y límites del entorno usado para cerrar 
 - Lints Rust: `cargo clippy --manifest-path src-tauri\Cargo.toml --all-targets -- -D warnings`.
 - Build Tauri de producción y bundle NSIS firmado.
 
-La suite Rust contiene 30 pruebas. Cubre, entre otros casos: conflictos sin
+La suite Rust contiene 40 pruebas. Cubre, entre otros casos: conflictos sin
 sobrescritura, origen conservado ante copia fallida, guardado atómico, backups,
 save corrupto, metadata corrupta, Unicode, 1001 elementos no recursivos,
 subcajones, reordenamiento, restauración, caché limitada, migración del Dock de
@@ -63,7 +62,9 @@ forzar desde **Administrador → DOCK → Reubicar**.
 | --- | --- |
 | TypeScript | OK: `npm run check`. |
 | Frontend | OK: build Vite de producción. |
-| Rust | OK: 30/30 pruebas. |
+| Rust | OK: 40/40 pruebas. |
+| Carpeta física del Dock | OK por pruebas automatizadas: reconstrucción desde disco, metadata y separadores persistentes. Validación visual/manual pendiente. |
+| Prioridad tipo barra de tareas | OK por pruebas automatizadas: diferencia fullscreen de una ventana maximizada que conserva la barra de tareas. Validación visual/manual pendiente. |
 | Clippy | OK: todos los targets con `-D warnings`. |
 | Build Tauri | OK: perfil release optimizado y bundle NSIS firmado. |
 | Arranque normal | OK: Administrador 936×788 visible, dos Cajones restaurados, Dock oculto y tirador 58×14 visible. |

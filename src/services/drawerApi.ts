@@ -22,6 +22,7 @@ export const drawerApi = {
   getMonitors: () => invoke<MonitorInfo[]>("get_monitors"),
   getStorageInfo: () => invoke<StoragePathsInfo>("get_storage_info"),
   openDrawersRoot: () => invoke<void>("open_drawers_root"),
+  openDockRoot: () => invoke<void>("open_dock_root"),
   getPreferences: () => invoke<Preferences>("get_preferences"),
   updatePreferences: (patch: PreferencesPatch) =>
     invoke<Preferences>("update_preferences", { patch }),

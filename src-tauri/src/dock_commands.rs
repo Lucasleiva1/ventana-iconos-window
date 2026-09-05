@@ -1,8 +1,6 @@
 //! Comandos del Dock.
 //!
-//! El Dock es un lanzador: todo lo que se le agrega queda como acceso. Ningún
-//! comando de este módulo mueve, copia ni borra archivos del usuario; esa
-//! responsabilidad sigue siendo exclusiva del módulo Cajones.
+//! El Dock es un lanzador respaldado por su propia carpeta física en Documentos.
 
 use std::{collections::HashSet, fs, path::PathBuf};
 
@@ -13,6 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     commands::{commit, now_millis},
+    dock_repository,
     dock_service::{self, DOCK_HANDLE_WINDOW, DOCK_WINDOW},
     icon_service::IconService,
     item_repository::{self, AddItemFailure},
@@ -26,7 +25,7 @@ use crate::{
     shell_service::ShellService,
     shortcut_service,
     state::AppState,
-    storage_service::comparable_path,
+    storage_service::StorageService,
 };
 
 const DOCK_CHANGED_EVENT: &str = "dock:changed";
@@ -97,6 +96,8 @@ where
 /// Persiste el estado completo y avisa a todas las ventanas.
 fn persist(app: &AppHandle, state: &State<'_, AppState>) -> Result<(), String> {
     let snapshot = state.snapshot()?;
+    let storage = StorageService::paths()?;
+    dock_repository::write_metadata(&snapshot.dock, &storage)?;
     commit(app, &snapshot)
 }
 
@@ -361,8 +362,8 @@ fn next_order(dock: &DockState) -> u32 {
         .map_or(0, |value| value.saturating_add(1))
 }
 
-/// Agrega accesos. Nunca mueve el original: un `.exe`, una carpeta del
-/// Escritorio o un archivo de un Cajón se quedan exactamente donde estaban.
+/// Agrega accesos a la carpeta física del Dock. Los elementos del Escritorio
+/// se mueven; para orígenes externos se guarda una copia del acceso o un `.lnk`.
 #[tauri::command]
 pub fn add_dock_items(
     paths: Vec<String>,
@@ -372,12 +373,8 @@ pub fn add_dock_items(
 ) -> Result<DockAddResult, String> {
     validate_caller(&window, false)?;
     let snapshot = state.snapshot()?;
-    let mut known: HashSet<String> = snapshot
-        .dock
-        .items
-        .iter()
-        .map(|item| comparable_path(&item.path))
-        .collect();
+    let storage = StorageService::paths()?;
+    let mut known = HashSet::new();
     let mut order = next_order(&snapshot.dock);
     let now = now_millis();
     let mut added = Vec::new();
@@ -399,20 +396,44 @@ pub fn add_dock_items(
                 continue;
             }
         };
-        if !known.insert(comparable_path(&path)) {
+        let source_key = path.to_string_lossy().replace('/', "\\").to_lowercase();
+        if !known.insert(source_key) {
             duplicates += 1;
             continue;
         }
         let item_type = item_repository::classify(&path, &metadata);
         let display = item_repository::display_name(&path, &item_type);
-        let icon_key = IconService::key_for(&path);
-        let _ = IconService::ensure(&app, &path, &icon_key);
+        let destination = match dock_repository::materialize(&path, &display, &storage) {
+            Ok(destination) => destination,
+            Err(message) => {
+                failures.push(AddItemFailure {
+                    path: path.to_string_lossy().into_owned(),
+                    message,
+                });
+                continue;
+            }
+        };
+        let stored_metadata = match fs::metadata(&destination) {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                failures.push(AddItemFailure {
+                    path: path.to_string_lossy().into_owned(),
+                    message: format!(
+                        "El acceso se guardó, pero Windows no pudo volver a leerlo: {error}"
+                    ),
+                });
+                continue;
+            }
+        };
+        let stored_type = item_repository::classify(&destination, &stored_metadata);
+        let icon_key = IconService::key_for(&destination);
+        let _ = IconService::ensure(&app, &destination, &icon_key);
         added.push(DockItem {
             id: Uuid::new_v4().to_string(),
             kind: DockItemKind::Shortcut,
-            item_type,
+            item_type: stored_type,
             display_name: display,
-            path,
+            path: destination,
             icon_key,
             order,
             available: true,
@@ -437,7 +458,7 @@ pub fn add_dock_items(
     })
 }
 
-/// Quita el acceso. Nunca toca el archivo, la carpeta ni el programa real.
+/// Restaura el elemento físico al Escritorio y recién entonces lo quita del Dock.
 #[tauri::command]
 pub fn remove_dock_item(
     item_id: String,
@@ -446,6 +467,9 @@ pub fn remove_dock_item(
     state: State<'_, AppState>,
 ) -> Result<DockState, String> {
     validate_caller(&window, false)?;
+    let current = dock_item(&state.snapshot()?, &item_id)?;
+    let storage = StorageService::paths()?;
+    dock_repository::restore_to_desktop(&current, &storage)?;
     let dock = apply(&app, &state, false, move |dock| {
         let before = dock.items.len();
         dock.items.retain(|item| item.id != item_id);
@@ -610,8 +634,14 @@ pub async fn repair_dock_item(
     let metadata = fs::metadata(&path)
         .map_err(|error| format!("Windows no pudo leer la nueva ubicación: {error}"))?;
     let item_type = item_repository::classify(&path, &metadata);
-    let icon_key = IconService::key_for(&path);
-    let _ = IconService::ensure(&app, &path, &icon_key);
+    let display_name = item_repository::display_name(&path, &item_type);
+    let storage = StorageService::paths()?;
+    let stored_path = dock_repository::materialize(&path, &display_name, &storage)?;
+    let stored_metadata = fs::metadata(&stored_path)
+        .map_err(|error| format!("Windows no pudo leer el acceso reparado: {error}"))?;
+    let stored_type = item_repository::classify(&stored_path, &stored_metadata);
+    let icon_key = IconService::key_for(&stored_path);
+    let _ = IconService::ensure(&app, &stored_path, &icon_key);
     let target = item_id;
     let dock = apply(&app, &state, false, move |dock| {
         let stored = dock
@@ -619,8 +649,8 @@ pub async fn repair_dock_item(
             .iter_mut()
             .find(|value| value.id == target)
             .ok_or_else(|| "Ese acceso ya no está en el Dock".to_owned())?;
-        stored.path = path;
-        stored.item_type = item_type;
+        stored.path = stored_path;
+        stored.item_type = stored_type;
         stored.icon_key = icon_key;
         stored.available = true;
         Ok(())
@@ -715,8 +745,8 @@ pub fn get_dock_item_icon(
     IconService::data_url(&app, &item.path, &item.icon_key)
 }
 
-/// Revisa disponibilidad sin vigilantes en segundo plano: sólo cuando el Dock
-/// se abre o cuando el usuario lo pide.
+/// Sincroniza el primer nivel de la carpeta física. Así aparecen los elementos
+/// agregados manualmente y se retiran de la vista los que ya no están allí.
 #[tauri::command]
 pub fn refresh_dock_availability(
     window: WebviewWindow,
@@ -724,35 +754,20 @@ pub fn refresh_dock_availability(
     state: State<'_, AppState>,
 ) -> Result<DockState, String> {
     validate_caller(&window, true)?;
-    let snapshot = state.snapshot()?;
-    let availability: Vec<(String, bool)> = snapshot
-        .dock
-        .items
-        .iter()
-        .map(|item| {
-            (
-                item.id.clone(),
-                item.kind == DockItemKind::Separator || item.path.exists(),
-            )
-        })
-        .collect();
-    let changed = snapshot
-        .dock
-        .items
-        .iter()
-        .zip(&availability)
-        .any(|(item, (_, available))| item.available != *available);
-    let dock = apply(&app, &state, false, move |dock| {
-        for (id, available) in availability {
-            if let Some(item) = dock.items.iter_mut().find(|value| value.id == id) {
-                item.available = available;
-            }
+    let mut synchronized = state.snapshot()?.dock;
+    let storage = StorageService::paths()?;
+    dock_repository::sync_dock(&mut synchronized, &storage, now_millis())?;
+    for item in &synchronized.items {
+        if item.kind != DockItemKind::Separator {
+            let _ = IconService::ensure(&app, &item.path, &item.icon_key);
         }
+    }
+    let synchronized_items = synchronized.items;
+    let dock = apply(&app, &state, false, move |dock| {
+        dock.items = synchronized_items;
         Ok(())
     })?;
-    if changed {
-        persist(&app, &state)?;
-    }
+    persist(&app, &state)?;
     Ok(dock)
 }
 

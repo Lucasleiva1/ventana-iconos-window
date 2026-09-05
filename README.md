@@ -1,6 +1,6 @@
 # Desktop Organizer
 
-Desktop Organizer es una aplicación nativa para Windows que organiza el Escritorio mediante cajones visuales respaldados por carpetas físicas reales y un Dock retráctil de accesos rápidos. La versión `0.2.0` cierra los módulos Cajones y Dock.
+Desktop Organizer es una aplicación nativa para Windows que organiza el Escritorio mediante cajones visuales respaldados por carpetas físicas reales y un Dock retráctil de accesos rápidos. La versión `0.2.1` estabiliza el almacenamiento y la actualización del Dock.
 
 ## Qué incluye
 
@@ -21,10 +21,12 @@ La arquitectura central es:
 Cajón visual ↔ carpeta física real
 ```
 
-Los documentos y carpetas no se guardan dentro de la aplicación ni dentro del JSON. Viven en la carpeta Documentos real informada por Windows:
+Los documentos, carpetas y accesos no se guardan dentro de la aplicación. Viven en carpetas reales y claramente separadas dentro de Documentos:
 
 ```text
-Documentos\Desktop Organizer\Cajones
+Documentos\Desktop Organizer\
+├── Cajones\
+└── Dock - Accesos\
 ```
 
 Windows puede redirigir Documentos o Escritorio a OneDrive u otra ubicación. Desktop Organizer consulta las Known Folders nativas y no presupone una ruta `C:\Users\...`.
@@ -35,7 +37,7 @@ Consultá [RECOVERY.md](RECOVERY.md) para recuperación manual y reinstalación.
 
 ## Instalación
 
-1. Cuando se publique v0.2.0, descargá `Desktop-Organizer-v0.2.0-Setup.exe` desde GitHub Releases.
+1. Descargá `Desktop-Organizer-v0.2.1-Setup.exe` desde GitHub Releases.
 2. Verificá su SHA-256 con el archivo `SHA256SUMS.txt` de la misma Release.
 3. Ejecutá el instalador. La instalación es por usuario y no requiere privilegios de administrador.
 4. Abrí **Desktop Organizer** desde el menú Inicio.
@@ -53,20 +55,21 @@ Windows puede mostrar una advertencia de SmartScreen porque esta primera versió
 
 ## El Dock
 
-El Dock es un lanzador, no un almacén: todo lo que le arrastres queda como acceso y el archivo, la carpeta o el programa original se quedan exactamente donde estaban.
+El Dock es un lanzador con respaldo físico propio en `Documentos\Desktop Organizer\Dock - Accesos`.
 
 1. Con el Dock activado, en el borde inferior de la pantalla queda un tirador pequeño.
 2. **Un clic** en el tirador abre el Dock; otro clic lo cierra. Pasar el mouse por encima sólo lo ilumina: nunca lo abre.
-3. Arrastrá programas, accesos directos, carpetas o archivos desde el Explorador hacia el Dock.
+3. Arrastrá programas, accesos directos, carpetas o archivos desde el Explorador hacia el Dock. Si vienen del Escritorio, se mueven a la carpeta del Dock y desaparecen del Escritorio. Si vienen de otra ubicación, el original queda intacto y el Dock guarda una copia del acceso o crea un `.lnk`.
 4. **Un clic** sobre un icono lo abre. Si la preferencia «Ocultar Dock después de abrir un elemento» está activada, el Dock se aparta solo.
 5. Arrastrá un icono para reordenarlo. El orden se guarda.
-6. Clic derecho sobre un icono: Abrir, Abrir ubicación, Renombrar en Dock, Buscar nueva ubicación si está roto o Quitar del Dock. Quitar borra sólo el acceso.
-7. Clic derecho sobre el fondo del Dock permite añadir separadores y actualizar la disponibilidad. Los separadores también se reordenan.
+6. Clic derecho sobre un icono: Abrir, Abrir ubicación, Renombrar en Dock, Buscar nueva ubicación si está roto o Restaurar al Escritorio. La restauración nunca sobrescribe un nombre existente.
+7. Clic derecho sobre el fondo del Dock permite añadir separadores, abrir su carpeta física y actualizarla. Cualquier elemento colocado manualmente en el primer nivel de esa carpeta aparece en el Dock.
 8. `Esc` cierra el Dock. El Administrador, el System Tray y el shortcut global opcional también pueden mostrarlo u ocultarlo.
+9. La uñita tiene la misma prioridad visual que la barra de tareas: queda sobre ventanas normales, pero una película, juego o aplicación fullscreen del mismo monitor la cubre.
 
 La sección **DOCK** del Administrador permite elegir monitor, ancho automático/manual, tamaño y espaciado de iconos, geometría y posición del tirador, colores, opacidades, bordes, blur, animaciones, modo rendimiento y shortcut.
 
-La diferencia es intencional: un **Cajón** puede mover físicamente archivos a su carpeta administrada; el **Dock** sólo conserva referencias y nunca mueve ni elimina el original.
+La diferencia es intencional: cada **Cajón** tiene su carpeta física propia dentro de `Cajones`; el **Dock** usa una única carpeta física diferenciada llamada `Dock - Accesos`.
 
 ## Ubicación de datos
 
@@ -75,12 +78,14 @@ Dentro de la carpeta Documentos conocida por Windows:
 ```text
 Desktop Organizer\
 ├── Cajones\
+├── Dock - Accesos\
 ├── Backups\
 └── desktop-organizer-save.json
 ```
 
 - `Cajones`: contenido real del usuario.
-- `desktop-organizer-save.json`: apariencia, posiciones, IDs, orden, preferencias y accesos del Dock.
+- `Dock - Accesos`: elementos y accesos reales mostrados por el Dock. Incluye una metadata oculta `.dock.json` con nombres, IDs, separadores y orden, por lo que la carpeta completa sirve como copia de seguridad.
+- `desktop-organizer-save.json`: apariencia, posiciones, IDs, orden y preferencias generales.
 - `Backups`: hasta cinco copias recientes válidas del save y, cuando corresponde, copias preservadas de saves corruptos.
 - `.drawer.json`: metadata oculta mínima de identidad dentro de cada cajón o subcajón.
 
@@ -121,6 +126,7 @@ Los assets firmados requieren las variables de entorno privadas de Tauri. La cla
 
 `v0.1.0`: módulo Cajones.
 
-`v0.2.0`: Dock avanzado implementado y build firmado validado localmente. La
-publicación está bloqueada por la validación pendiente del icono del Tray tras
-cierres forzados. Parte 7 (Paneles organizadores) pendiente.
+`v0.2.0`: Dock avanzado.
+
+`v0.2.1`: carpeta física recuperable para el Dock, actualizador integrado y
+prioridad visual compatible con aplicaciones fullscreen. Parte 7 pendiente.

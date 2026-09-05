@@ -352,9 +352,11 @@ export function DockWindow() {
               const next = await dockApi.removeItem(menuItem.id);
               dockApi.forgetIcon(menuItem.iconKey);
               setDock(next);
-              showToast("Acceso quitado del Dock. El archivo original no se tocó.");
+              showToast(menuItem.kind === "separator"
+                ? "Separador quitado."
+                : "Acceso restaurado al Escritorio.");
             })}>
-              Quitar del Dock
+              {menuItem.kind === "separator" ? "Quitar separador" : "Restaurar al Escritorio"}
             </button>
             <button type="button" className="dock-menu-close" aria-label="Cerrar menú" onClick={() => setMenuItem(null)}>
               ✕
@@ -373,6 +375,9 @@ export function DockWindow() {
               setDock(await dockApi.refreshAvailability());
               showToast("Dock actualizado.");
             })}>Actualizar Dock</button>
+            <button type="button" role="menuitem" onClick={() => void runMenuAction(() => dockApi.openFolder())}>
+              Abrir carpeta del Dock
+            </button>
             <button type="button" className="dock-menu-close" aria-label="Cerrar menú" onClick={() => setDockMenuOpen(false)}>✕</button>
           </div>
         )}
