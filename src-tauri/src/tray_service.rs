@@ -5,7 +5,8 @@ use tauri::{
 };
 
 use crate::{
-    commands, shell_service::ShellService, storage_service::StorageService, window_service,
+    commands, dock_commands, shell_service::ShellService, storage_service::StorageService,
+    window_service,
 };
 
 pub const TRAY_ID: &str = "desktop-organizer-tray";
@@ -15,6 +16,8 @@ const OPEN_ADMIN: &str = "open_admin";
 const SHOW_ALL: &str = "show_all";
 const HIDE_ALL: &str = "hide_all";
 const OPEN_DRAWERS: &str = "open_drawers";
+const SHOW_DOCK: &str = "show_dock";
+const HIDE_DOCK: &str = "hide_dock";
 const SETTINGS: &str = "settings";
 const QUIT: &str = "quit";
 
@@ -51,12 +54,17 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
         None::<&str>,
     )
     .map_err(|error| error.to_string())?;
+    let show_dock = MenuItem::with_id(app, SHOW_DOCK, "Mostrar Dock", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
+    let hide_dock = MenuItem::with_id(app, HIDE_DOCK, "Ocultar Dock", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
     let settings = MenuItem::with_id(app, SETTINGS, "Configuración", true, None::<&str>)
         .map_err(|error| error.to_string())?;
     let quit = MenuItem::with_id(app, QUIT, "Salir", true, None::<&str>)
         .map_err(|error| error.to_string())?;
     let separator_one = PredefinedMenuItem::separator(app).map_err(|error| error.to_string())?;
     let separator_two = PredefinedMenuItem::separator(app).map_err(|error| error.to_string())?;
+    let separator_dock = PredefinedMenuItem::separator(app).map_err(|error| error.to_string())?;
     let menu = Menu::with_items(
         app,
         &[
@@ -66,6 +74,9 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
             &show_all,
             &hide_all,
             &open_drawers,
+            &separator_dock,
+            &show_dock,
+            &hide_dock,
             &settings,
             &separator_two,
             &quit,
@@ -112,6 +123,8 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
         OPEN_DRAWERS => {
             StorageService::paths().and_then(|paths| ShellService::open(&paths.drawers))
         }
+        SHOW_DOCK => dock_commands::set_visibility(app, true),
+        HIDE_DOCK => dock_commands::set_visibility(app, false),
         SETTINGS => window_service::show_admin_window(app).and_then(|()| {
             app.emit("admin:open-settings", ())
                 .map_err(|error| error.to_string())

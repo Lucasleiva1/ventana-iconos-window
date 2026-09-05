@@ -3,6 +3,7 @@ use std::{
     fs,
     io::{BufReader, BufWriter, Read, Write},
     path::{Component, Path, PathBuf, Prefix},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use serde::{Deserialize, Serialize};
@@ -141,7 +142,19 @@ impl StorageService {
                     drawer.folder_path.display()
                 ));
             }
-            if let Some(metadata) = read_metadata(&drawer.folder_path)?
+            let metadata = match read_metadata(&drawer.folder_path) {
+                Ok(metadata) => metadata,
+                Err(error) if !error.contains("usa una versión más nueva") => {
+                    let archived = archive_corrupt_metadata(&drawer.folder_path)?;
+                    eprintln!(
+                        "{error}. La metadata dañada se conservó en {} y será reconstruida.",
+                        archived.display()
+                    );
+                    None
+                }
+                Err(error) => return Err(error),
+            };
+            if let Some(metadata) = metadata
                 && metadata.drawer_id != drawer.id
             {
                 return Err(format!(
@@ -223,6 +236,38 @@ impl StorageService {
 
     pub fn read_folder_metadata(folder: &Path) -> Result<Option<DrawerMetadata>, String> {
         read_metadata(folder)
+    }
+
+    pub fn read_or_repair_folder_metadata(folder: &Path) -> Result<Option<DrawerMetadata>, String> {
+        match read_metadata(folder) {
+            Ok(metadata) => Ok(metadata),
+            Err(error) if !error.contains("usa una versión más nueva") => {
+                let archived = archive_corrupt_metadata(folder)?;
+                let name = folder
+                    .file_name()
+                    .map(|value| value.to_string_lossy().into_owned())
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or_else(|| "Subcajón recuperado".to_owned());
+                let metadata = DrawerMetadata {
+                    drawer_id: Uuid::new_v4().to_string(),
+                    format_version: DRAWER_METADATA_VERSION,
+                    name,
+                    created_at: timestamp_millis(),
+                };
+                Self::write_folder_metadata(
+                    folder,
+                    &metadata.drawer_id,
+                    &metadata.name,
+                    metadata.created_at,
+                )?;
+                eprintln!(
+                    "{error}. La metadata dañada se conservó en {} y se reconstruyó sin tocar el contenido.",
+                    archived.display()
+                );
+                Ok(Some(metadata))
+            }
+            Err(error) => Err(error),
+        }
     }
 
     pub fn remove_folder_metadata(folder: &Path) -> Result<(), String> {
@@ -506,6 +551,30 @@ fn read_metadata(folder: &Path) -> Result<Option<DrawerMetadata>, String> {
         ));
     }
     Ok(Some(metadata))
+}
+
+fn archive_corrupt_metadata(folder: &Path) -> Result<PathBuf, String> {
+    let source = folder.join(DRAWER_METADATA_NAME);
+    let archived = folder.join(format!(
+        "{DRAWER_METADATA_NAME}.corrupt-{}-{}",
+        timestamp_millis(),
+        Uuid::new_v4()
+    ));
+    fs::rename(&source, &archived).map_err(|error| {
+        format!(
+            "No se pudo apartar la metadata dañada {}: {error}. El contenido de la carpeta permanece intacto.",
+            source.display()
+        )
+    })?;
+    set_hidden(&archived)?;
+    Ok(archived)
+}
+
+fn timestamp_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX))
+        .unwrap_or_default()
 }
 
 fn known_folder(id: &GUID) -> Result<PathBuf, String> {
@@ -798,6 +867,9 @@ mod tests {
             assert!(StorageService::validate_windows_folder_name(invalid).is_err());
         }
         assert!(StorageService::validate_windows_folder_name("Clientes 2026").is_ok());
+        for unicode in ["Diseño", "Música", "Año 2026", "Ñandú", "日本語"] {
+            assert!(StorageService::validate_windows_folder_name(unicode).is_ok());
+        }
     }
 
     #[test]
@@ -820,6 +892,43 @@ mod tests {
         assert_eq!(
             fs::read(folder.join("contenido.txt")).expect("content must remain"),
             b"safe"
+        );
+        fs::remove_dir_all(root).expect("fixtures should be removed");
+    }
+
+    #[test]
+    fn corrupt_subdrawer_metadata_is_archived_and_rebuilt_without_touching_content() {
+        let root = std::env::temp_dir().join(format!(
+            "desktop-organizer-corrupt-metadata-{}",
+            Uuid::new_v4()
+        ));
+        let folder = root.join("日本語");
+        fs::create_dir_all(&folder).expect("subdrawer should exist");
+        fs::write(folder.join("contenido.txt"), b"safe").expect("content should exist");
+        fs::write(folder.join(".drawer.json"), b"{ broken").expect("corrupt metadata should exist");
+
+        let repaired = StorageService::read_or_repair_folder_metadata(&folder)
+            .expect("metadata should be repaired")
+            .expect("subdrawer metadata should remain present");
+
+        assert_eq!(repaired.name, "日本語");
+        assert_eq!(
+            fs::read(folder.join("contenido.txt")).expect("content must remain"),
+            b"safe"
+        );
+        assert!(
+            fs::read_dir(&folder)
+                .expect("folder should read")
+                .filter_map(Result::ok)
+                .any(|entry| entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".drawer.json.corrupt-"))
+        );
+        assert!(
+            StorageService::read_folder_metadata(&folder)
+                .expect("metadata should read")
+                .is_some()
         );
         fs::remove_dir_all(root).expect("fixtures should be removed");
     }

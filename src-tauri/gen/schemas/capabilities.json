@@ -1,1 +1,1 @@
-{"desktop-windows":{"identifier":"desktop-windows","description":"Acceso mínimo para las ventanas locales del administrador y los cajones.","local":true,"windows":["admin","drawer-*"],"permissions":["core:default"]}}
+{"desktop-windows":{"identifier":"desktop-windows","description":"Acceso mínimo para el administrador, los cajones, el Dock y su tirador.","local":true,"windows":["admin","drawer-*","dock","dock-handle"],"permissions":["core:default"]}}

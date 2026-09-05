@@ -4,13 +4,19 @@ use crate::model::PersistedState;
 
 pub struct AppState {
     inner: Mutex<PersistedState>,
+    startup_notice: Option<String>,
 }
 
 impl AppState {
-    pub fn new(state: PersistedState) -> Self {
+    pub fn new(state: PersistedState, startup_notice: Option<String>) -> Self {
         Self {
             inner: Mutex::new(state),
+            startup_notice,
         }
+    }
+
+    pub fn startup_notice(&self) -> Option<String> {
+        self.startup_notice.clone()
     }
 
     pub fn snapshot(&self) -> Result<PersistedState, String> {

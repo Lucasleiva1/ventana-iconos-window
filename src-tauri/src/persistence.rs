@@ -20,35 +20,64 @@ static SAVE_LOCK: Mutex<()> = Mutex::new(());
 
 pub struct PersistenceService;
 
+pub struct LoadResult {
+    pub state: PersistedState,
+    pub recovery_notice: Option<String>,
+}
+
 impl PersistenceService {
     pub fn master_exists() -> Result<bool, String> {
         Ok(StorageService::paths()?.master_save.exists())
     }
 
-    pub fn load(app: &AppHandle) -> Result<PersistedState, String> {
+    pub fn load(app: &AppHandle) -> Result<LoadResult, String> {
         let paths = StorageService::paths()?;
         if paths.master_save.exists() {
             return match Self::load_path(&paths.master_save) {
-                Ok(state) => Ok(state),
-                Err(master_error) => Self::load_latest_backup(&paths).map_err(|backup_error| {
-                    format!(
-                        "El guardado maestro no es válido ({master_error}) y no se encontró una copia reciente utilizable ({backup_error}). No se sobrescribió ningún archivo."
-                    )
+                Ok(state) => Ok(LoadResult {
+                    state,
+                    recovery_notice: None,
                 }),
+                Err(master_error) => {
+                    let state = Self::load_latest_backup(&paths).map_err(|backup_error| {
+                        format!(
+                            "El guardado maestro no es válido ({master_error}) y no se encontró una copia reciente utilizable ({backup_error}). No se sobrescribió ningún archivo."
+                        )
+                    })?;
+                    let archived = Self::restore_master_from_backup(&paths, &state)?;
+                    Ok(LoadResult {
+                        state,
+                        recovery_notice: Some(format!(
+                            "Se recuperó la configuración desde el backup más reciente. El save dañado se conservó en {}.",
+                            archived.display()
+                        )),
+                    })
+                }
             };
         }
 
         for legacy in Self::legacy_paths(app)? {
             if legacy.exists() {
-                return Self::load_path(&legacy).map_err(|error| {
-                    format!(
-                        "No se pudo migrar la configuración anterior {}: {error}. El archivo se conservó intacto.",
-                        legacy.display()
-                    )
-                });
+                return Self::load_path(&legacy)
+                    .map(|state| LoadResult {
+                        state,
+                        recovery_notice: Some(format!(
+                            "Se recuperó una configuración anterior desde {}.",
+                            legacy.display()
+                        )),
+                    })
+                    .map_err(|error| {
+                        format!(
+                            "No se pudo migrar la configuración anterior {}: {error}. El archivo se conservó intacto.",
+                            legacy.display()
+                        )
+                    });
             }
         }
-        Ok(PersistedState::default())
+        Ok(LoadResult {
+            state: PersistedState::default(),
+            recovery_notice: None,
+        })
     }
 
     pub fn load_external(path: &Path) -> Result<PersistedState, String> {
@@ -180,6 +209,60 @@ impl PersistenceService {
         Err(last_error)
     }
 
+    fn restore_master_from_backup(
+        paths: &StoragePaths,
+        recovered: &PersistedState,
+    ) -> Result<PathBuf, String> {
+        fs::create_dir_all(&paths.backups)
+            .map_err(|error| format!("No se pudo preparar {}: {error}", paths.backups.display()))?;
+        let archived = paths.backups.join(format!(
+            "desktop-organizer-save-corrupt-{}-{}.json",
+            timestamp_millis(),
+            Uuid::new_v4()
+        ));
+        fs::rename(&paths.master_save, &archived).map_err(|error| {
+            format!(
+                "Se encontró un backup válido, pero no se pudo apartar el save dañado {}: {error}. No se sobrescribió ningún archivo.",
+                paths.master_save.display()
+            )
+        })?;
+
+        if let Err(error) = Self::save_to_path(recovered, &paths.master_save, None) {
+            if !paths.master_save.exists() {
+                let _ = fs::rename(&archived, &paths.master_save);
+            }
+            return Err(format!(
+                "Se encontró un backup válido, pero no se pudo restaurar el guardado maestro: {error}"
+            ));
+        }
+        Self::prune_corrupt_saves(paths)?;
+        Ok(archived)
+    }
+
+    fn prune_corrupt_saves(paths: &StoragePaths) -> Result<(), String> {
+        let mut corrupt: Vec<PathBuf> = fs::read_dir(&paths.backups)
+            .map_err(|error| format!("No se pudo revisar {}: {error}", paths.backups.display()))?
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.file_name().is_some_and(|name| {
+                    name.to_string_lossy()
+                        .starts_with("desktop-organizer-save-corrupt-")
+                })
+            })
+            .collect();
+        corrupt.sort_by(|left, right| right.file_name().cmp(&left.file_name()));
+        for obsolete in corrupt.into_iter().skip(3) {
+            fs::remove_file(&obsolete).map_err(|error| {
+                format!(
+                    "La recuperación se completó, pero no se pudo retirar el save corrupto antiguo {}: {error}",
+                    obsolete.display()
+                )
+            })?;
+        }
+        Ok(())
+    }
+
     fn prune_backups(paths: &StoragePaths) -> Result<(), String> {
         let mut backups = backup_paths(paths)?;
         backups.sort_by(|left, right| right.file_name().cmp(&left.file_name()));
@@ -309,6 +392,65 @@ mod tests {
     }
 
     #[test]
+    fn migrates_part_five_dock_without_losing_items_or_order() {
+        let value = serde_json::json!({
+            "schemaVersion": 5,
+            "drawers": [],
+            "preferences": {},
+            "dock": {
+                "enabled": true,
+                "visible": false,
+                "monitorId": "DISPLAY1@0,0",
+                "iconSize": "medium",
+                "opacity": 0.9,
+                "hideAfterOpen": true,
+                "items": [{
+                    "id": "dock-item-1",
+                    "type": "executable",
+                    "displayName": "Programa",
+                    "path": "C:\\Programa.exe",
+                    "iconKey": "v1-programa",
+                    "order": 7,
+                    "available": true,
+                    "createdAt": 12
+                }],
+                "width": 420,
+                "height": 84,
+                "createdAt": 10,
+                "updatedAt": 20
+            }
+        });
+
+        let migrated = PersistenceService::migrate(value).expect("part 5 state should migrate");
+
+        assert_eq!(migrated.schema_version, SCHEMA_VERSION);
+        assert_eq!(migrated.dock.items.len(), 1);
+        assert_eq!(migrated.dock.items[0].id, "dock-item-1");
+        assert_eq!(migrated.dock.items[0].order, 7);
+        assert_eq!(
+            migrated.dock.items[0].kind,
+            crate::model::DockItemKind::Shortcut
+        );
+        assert_eq!(
+            migrated.dock.handle_position,
+            crate::model::DockHandlePosition::Center
+        );
+        assert!(!migrated.dock.shortcut_enabled);
+    }
+
+    #[test]
+    fn rejects_configuration_from_a_newer_schema() {
+        let value = serde_json::json!({
+            "schemaVersion": SCHEMA_VERSION + 1,
+            "drawers": [],
+            "preferences": {}
+        });
+        let error = PersistenceService::migrate(value)
+            .expect_err("future schemas must not be imported silently");
+        assert!(error.contains("admite hasta"));
+    }
+
+    #[test]
     fn master_save_is_verified_backed_up_and_recoverable() {
         let fixture =
             std::env::temp_dir().join(format!("desktop-organizer-save-{}", Uuid::new_v4()));
@@ -332,6 +474,7 @@ mod tests {
                 1,
             )],
             preferences: Default::default(),
+            dock: Default::default(),
         };
         PersistenceService::save_to_path(&first, &paths.master_save, Some(&paths))
             .expect("first save should work");
@@ -350,6 +493,56 @@ mod tests {
         let recovered = PersistenceService::load_latest_backup(&paths)
             .expect("latest valid backup should recover");
         assert_eq!(recovered.drawers[0].name, "VIDEO");
+        std::fs::remove_dir_all(fixture).expect("fixtures should be removed");
+    }
+
+    #[test]
+    fn corrupt_master_is_archived_before_a_valid_backup_is_restored() {
+        let fixture =
+            std::env::temp_dir().join(format!("desktop-organizer-corrupt-save-{}", Uuid::new_v4()));
+        let root = fixture.join("Documents").join("Desktop Organizer");
+        let paths = StoragePaths {
+            documents: fixture.join("Documents"),
+            desktop: fixture.join("Desktop"),
+            drawers: root.join("Cajones"),
+            backups: root.join("Backups"),
+            master_save: root.join("desktop-organizer-save.json"),
+            root,
+        };
+        crate::storage_service::StorageService::ensure_layout(&paths).expect("layout should exist");
+        let state = PersistedState {
+            schema_version: SCHEMA_VERSION,
+            drawers: vec![Drawer::new(
+                "Música".to_owned(),
+                10,
+                20,
+                "monitor".to_owned(),
+                1,
+            )],
+            preferences: Default::default(),
+            dock: Default::default(),
+        };
+        PersistenceService::save_to_path(&state, &paths.master_save, Some(&paths))
+            .expect("valid state should be saved and backed up");
+        std::fs::write(&paths.master_save, b"{ invalid json")
+            .expect("master fixture should be corrupted");
+
+        let backup = PersistenceService::load_latest_backup(&paths)
+            .expect("a valid backup should be available");
+        let archived = PersistenceService::restore_master_from_backup(&paths, &backup)
+            .expect("backup should restore safely");
+
+        assert_eq!(
+            PersistenceService::load_path(&paths.master_save)
+                .expect("restored master should load")
+                .drawers[0]
+                .name,
+            "Música"
+        );
+        assert_eq!(
+            std::fs::read(archived).expect("corrupt save should remain"),
+            b"{ invalid json"
+        );
         std::fs::remove_dir_all(fixture).expect("fixtures should be removed");
     }
 

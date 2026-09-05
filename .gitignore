@@ -3,5 +3,16 @@ dist/
 src-tauri/target/
 src-tauri/target-part3/
 artifacts/
+.env
+.env.*
+!.env.example
+coverage/
+*.tmp
+*.bak
 *.log
 .DS_Store
+
+# Datos reales y copias personales: nunca deben entrar al repositorio.
+Desktop Organizer/
+desktop-organizer-save*.json
+Backups/

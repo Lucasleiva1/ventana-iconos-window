@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fs, path::PathBuf};
 
-use tauri::{AppHandle, State, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 use uuid::Uuid;
 
 use crate::{
@@ -470,6 +470,113 @@ pub fn reorder_drawer_level(
     let snapshot = store_drawer(&state, drawer.clone())?;
     commit(&app, &snapshot)?;
     item_repository::load_level(&drawer, &relative_path, now_millis())
+}
+
+#[tauri::command]
+pub fn begin_native_item_drag(
+    drawer_id: String,
+    relative_path: String,
+    item_id: String,
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    validate_caller(&window, &drawer_id)?;
+    let drawer = drawer(&state.snapshot()?, &drawer_id)?;
+    let item = item_at_level(&drawer, &relative_path, &item_id)?;
+    if item.storage_mode != StorageMode::Managed {
+        return Err(
+            "Sólo los elementos guardados físicamente se pueden sacar arrastrando".to_owned(),
+        );
+    }
+    if !item.path.exists() {
+        return Err("El elemento ya no está disponible en su carpeta física".to_owned());
+    }
+
+    let source_path = item.path.clone();
+    let dragged_name = item.display_name.clone();
+    let callback_app = app.clone();
+    let error_app = app.clone();
+    app.run_on_main_thread(move || {
+        let callback_source = source_path.clone();
+        let callback_item = item.clone();
+        let callback_drawer_id = drawer_id.clone();
+        let callback_relative_path = relative_path.clone();
+        let callback_app_inner = callback_app.clone();
+        let result = drag::start_drag(
+            &window,
+            drag::DragItem::Files(vec![source_path]),
+            drag::Image::Raw(include_bytes!("../icons/icon.png").to_vec()),
+            move |result, _cursor_position| {
+                if !matches!(result, drag::DragResult::Dropped) {
+                    return;
+                }
+                if callback_source.exists() {
+                    let _ = callback_app_inner.emit(
+                        "drawers:feedback",
+                        "Windows no confirmó el movimiento; el original sigue seguro en el cajón.",
+                    );
+                    return;
+                }
+                let app_state = callback_app_inner.state::<AppState>();
+                match finalize_dragged_out_item(
+                    &callback_drawer_id,
+                    &callback_relative_path,
+                    &callback_item,
+                    &callback_app_inner,
+                    &app_state,
+                ) {
+                    Ok(()) => {
+                        let _ = callback_app_inner.emit(
+                            "drawers:feedback",
+                            format!("{} salió del cajón correctamente.", callback_item.display_name),
+                        );
+                    }
+                    Err(error) => {
+                        let _ = callback_app_inner.emit(
+                            "drawers:feedback",
+                            format!(
+                                "Windows movió el elemento, pero no se pudo actualizar el cajón: {error}"
+                            ),
+                        );
+                    }
+                }
+            },
+            drag::Options {
+                mode: drag::DragMode::Move,
+                skip_animatation_on_cancel_or_failure: false,
+            },
+        );
+        if let Err(error) = result {
+            let _ = error_app.emit(
+                "drawers:feedback",
+                format!("No se pudo iniciar el arrastre de {dragged_name}: {error}"),
+            );
+        }
+    })
+    .map_err(|error| format!("No se pudo iniciar el arrastre nativo: {error}"))
+}
+
+fn finalize_dragged_out_item(
+    drawer_id: &str,
+    relative_path: &str,
+    item: &DrawerItem,
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+) -> Result<(), String> {
+    let mut drawer = drawer(&state.snapshot()?, drawer_id)?;
+    remove_order_id(&mut drawer, relative_path, &item.id);
+    if item.is_subdrawer {
+        remove_subtree_state(
+            &mut drawer,
+            &join_relative(relative_path, &item.physical_name)?,
+        );
+    }
+    item_repository::sync_drawer(&mut drawer, now_millis())?;
+    let snapshot = store_drawer(state, drawer)?;
+    commit(app, &snapshot).map_err(|error| {
+        format!("el elemento quedó fuera del cajón, pero falló el guardado: {error}")
+    })
 }
 
 #[tauri::command]

@@ -3,6 +3,11 @@ import type { InternalDragPayload } from "../types/drawer";
 
 export const INTERNAL_ITEM_MIME = "application/x-desktop-organizer-item";
 
+export function hasInternalDrag(event: DragEvent) {
+  return event.dataTransfer.types.includes(INTERNAL_ITEM_MIME)
+    || event.dataTransfer.types.includes("text/plain");
+}
+
 export function parseInternalDrag(event: DragEvent): InternalDragPayload | null {
   const raw = event.dataTransfer.getData(INTERNAL_ITEM_MIME)
     || event.dataTransfer.getData("text/plain");

@@ -32,6 +32,7 @@ pub struct RecoveryStatus {
     pub master_save_exists: bool,
     pub recoverable_drawers: usize,
     pub storage: StoragePathsInfo,
+    pub notice: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -213,6 +214,7 @@ pub fn get_recovery_status(state: State<'_, AppState>) -> Result<RecoveryStatus,
         master_save_exists: PersistenceService::master_exists()?,
         recoverable_drawers,
         storage: StoragePathsInfo::from(&paths),
+        notice: state.startup_notice(),
     })
 }
 
@@ -1129,6 +1131,7 @@ mod tests {
             schema_version: SCHEMA_VERSION,
             drawers: vec![current_drawer],
             preferences: Default::default(),
+            dock: Default::default(),
         };
         let imported = PersistedState {
             schema_version: SCHEMA_VERSION,
@@ -1138,6 +1141,7 @@ mod tests {
                 hide_admin_on_minimize: false,
                 start_silently: false,
             },
+            dock: Default::default(),
         };
         merge_imported_state(&mut current, imported, Path::new("C:\\Cajones"), 3)
             .expect("merge should work");

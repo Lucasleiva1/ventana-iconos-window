@@ -425,14 +425,14 @@ fn scan_managed_level(
                 .unwrap_or(path.as_os_str())
                 .to_string_lossy()
                 .into_owned();
-            existing.is_subdrawer =
-                metadata.is_dir() && StorageService::read_folder_metadata(&path)?.is_some();
+            existing.is_subdrawer = metadata.is_dir()
+                && StorageService::read_or_repair_folder_metadata(&path)?.is_some();
             items.push(existing);
             continue;
         }
         let item_type = classify(&path, &metadata);
         let folder_metadata = if metadata.is_dir() {
-            StorageService::read_folder_metadata(&path)?
+            StorageService::read_or_repair_folder_metadata(&path)?
         } else {
             None
         };
@@ -466,7 +466,7 @@ fn breadcrumbs(drawer: &Drawer, relative_path: &str) -> Result<Vec<DrawerBreadcr
         };
         accumulated.push(value);
         let folder = drawer.folder_path.join(&accumulated);
-        let name = StorageService::read_folder_metadata(&folder)?
+        let name = StorageService::read_or_repair_folder_metadata(&folder)?
             .map(|metadata| metadata.name)
             .unwrap_or_else(|| value.to_string_lossy().into_owned());
         result.push(DrawerBreadcrumb {
@@ -494,7 +494,9 @@ fn create_item(
         .to_string_lossy()
         .into_owned();
     let metadata = if item_type == DrawerItemType::Folder {
-        StorageService::read_folder_metadata(&path).ok().flatten()
+        StorageService::read_or_repair_folder_metadata(&path)
+            .ok()
+            .flatten()
     } else {
         None
     };
@@ -539,7 +541,7 @@ fn items_changed(left: &[DrawerItem], right: &[DrawerItem]) -> bool {
     })
 }
 
-fn classify(path: &Path, metadata: &fs::Metadata) -> DrawerItemType {
+pub(crate) fn classify(path: &Path, metadata: &fs::Metadata) -> DrawerItemType {
     if metadata.is_dir() {
         return DrawerItemType::Folder;
     }
@@ -556,7 +558,7 @@ fn classify(path: &Path, metadata: &fs::Metadata) -> DrawerItemType {
     }
 }
 
-fn display_name(path: &Path, item_type: &DrawerItemType) -> String {
+pub(crate) fn display_name(path: &Path, item_type: &DrawerItemType) -> String {
     let value = match item_type {
         DrawerItemType::Executable | DrawerItemType::Shortcut => path.file_stem(),
         DrawerItemType::Folder | DrawerItemType::File => path.file_name(),
@@ -840,6 +842,37 @@ mod tests {
                 .items
                 .len(),
             1
+        );
+        fs::remove_dir_all(root).expect("fixtures should be removed");
+    }
+
+    #[test]
+    fn a_thousand_top_level_items_load_without_recursive_scanning() {
+        let (root, _desktop, drawer) = fixture();
+        for index in 0..1_000 {
+            fs::write(
+                drawer.folder_path.join(format!("archivo-{index:04}.txt")),
+                b"x",
+            )
+            .expect("load fixture should be writable");
+        }
+        let nested = drawer.folder_path.join("Carpeta enorme");
+        fs::create_dir(&nested).expect("nested folder should exist");
+        for index in 0..100 {
+            fs::write(nested.join(format!("interno-{index:03}.txt")), b"nested")
+                .expect("nested fixture should be writable");
+        }
+
+        let level = load_level(&drawer, "", 5).expect("large level should load");
+
+        assert_eq!(level.items.len(), 1_001);
+        assert_eq!(
+            level
+                .items
+                .iter()
+                .filter(|item| item.display_name.starts_with("interno-"))
+                .count(),
+            0
         );
         fs::remove_dir_all(root).expect("fixtures should be removed");
     }

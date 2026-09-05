@@ -1,14 +1,17 @@
 import {
   useEffect,
+  useLayoutEffect,
+  useRef,
   useState,
   type DragEvent,
   type KeyboardEvent,
   type MouseEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { drawerApi } from "../../services/drawerApi";
 import { iconService } from "../../services/iconService";
 import {
-  INTERNAL_ITEM_MIME,
+  hasInternalDrag,
   joinDrawerPath,
   parseInternalDrag,
 } from "../../services/internalDrag";
@@ -24,6 +27,8 @@ interface DrawerItemViewProps {
   drawers: Drawer[];
   relativePath: string;
   item: DrawerItem;
+  dragging?: boolean;
+  dropTarget?: boolean;
   onNavigate: (relativePath: string) => void;
   onLevelChanged: (level?: DrawerLevel) => void;
   onReorder: (payload: InternalDragPayload) => Promise<void>;
@@ -43,6 +48,8 @@ export function DrawerItemView({
   drawers,
   relativePath,
   item,
+  dragging,
+  dropTarget,
   onNavigate,
   onLevelChanged,
   onReorder,
@@ -50,7 +57,9 @@ export function DrawerItemView({
   onFeedback,
 }: DrawerItemViewProps) {
   const [icon, setIcon] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ left: number; top: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuOpen = menuPosition !== null;
 
   useEffect(() => {
     let active = true;
@@ -66,7 +75,7 @@ export function DrawerItemView({
 
   useEffect(() => {
     if (!menuOpen) return;
-    const close = () => setMenuOpen(false);
+    const close = () => setMenuPosition(null);
     window.addEventListener("pointerdown", close);
     window.addEventListener("blur", close);
     return () => {
@@ -75,8 +84,19 @@ export function DrawerItemView({
     };
   }, [menuOpen]);
 
+  useLayoutEffect(() => {
+    if (!menuPosition || !menuRef.current) return;
+    const margin = 8;
+    const bounds = menuRef.current.getBoundingClientRect();
+    const left = Math.max(margin, Math.min(menuPosition.left, window.innerWidth - bounds.width - margin));
+    const top = Math.max(margin, Math.min(menuPosition.top, window.innerHeight - bounds.height - margin));
+    if (left !== menuPosition.left || top !== menuPosition.top) {
+      setMenuPosition({ left, top });
+    }
+  }, [menuPosition]);
+
   async function openItem() {
-    setMenuOpen(false);
+    setMenuPosition(null);
     if (item.isSubdrawer) {
       onNavigate(joinDrawerPath(relativePath, item.physicalName));
       return;
@@ -90,7 +110,7 @@ export function DrawerItemView({
 
   async function run(event: MouseEvent<HTMLButtonElement>, action: () => Promise<unknown>) {
     event.stopPropagation();
-    setMenuOpen(false);
+    setMenuPosition(null);
     try {
       await action();
       onLevelChanged();
@@ -106,16 +126,12 @@ export function DrawerItemView({
     }
   }
 
-  function beginInternalDrag(event: DragEvent<HTMLDivElement>) {
-    const payload: InternalDragPayload = {
-      sourceDrawerId: drawer.id,
-      sourceRelativePath: relativePath,
-      itemId: item.id,
-    };
-    const serialized = JSON.stringify(payload);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData(INTERNAL_ITEM_MIME, serialized);
-    event.dataTransfer.setData("text/plain", serialized);
+  function beginNativeDrag(event: DragEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setMenuPosition(null);
+    void drawerApi.beginNativeItemDrag(drawer.id, relativePath, item.id)
+      .catch((reason) => onFeedback(String(reason)));
   }
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
@@ -123,7 +139,9 @@ export function DrawerItemView({
     if (!payload || payload.itemId === item.id) return;
     event.preventDefault();
     event.stopPropagation();
-    const action = item.isSubdrawer
+    const sameLevel = payload.sourceDrawerId === drawer.id
+      && payload.sourceRelativePath.toLowerCase() === relativePath.toLowerCase();
+    const action = item.isSubdrawer && !sameLevel
       ? onMoveInto(payload, joinDrawerPath(relativePath, item.physicalName))
       : onReorder(payload);
     void action.catch((reason) => onFeedback(String(reason)));
@@ -133,15 +151,16 @@ export function DrawerItemView({
 
   return (
     <div
-      className={`drawer-item ${item.available ? "" : "is-unavailable"} ${item.isSubdrawer ? "is-subdrawer" : ""}`}
+      className={`drawer-item ${item.available ? "" : "is-unavailable"} ${item.isSubdrawer ? "is-subdrawer" : ""} ${dragging ? "is-reordering" : ""} ${dropTarget ? "is-order-target" : ""}`}
+      data-item-id={item.id}
       role="button"
       tabIndex={0}
-      draggable
+      draggable={false}
       title={`${item.displayName}\n${item.path}`}
       aria-label={`${item.displayName}${item.isSubdrawer ? ", subcajón" : ""}${item.available ? "" : ", no disponible"}`}
-      onDragStart={beginInternalDrag}
+      onDragStart={(event) => event.preventDefault()}
       onDragOver={(event) => {
-        if (event.dataTransfer.types.includes(INTERNAL_ITEM_MIME)) {
+        if (hasInternalDrag(event)) {
           event.preventDefault();
           event.dataTransfer.dropEffect = "move";
         }
@@ -151,7 +170,8 @@ export function DrawerItemView({
       onKeyDown={handleKeyDown}
       onContextMenu={(event) => {
         event.preventDefault();
-        setMenuOpen(true);
+        event.stopPropagation();
+        setMenuPosition({ left: event.clientX, top: event.clientY });
       }}
     >
       <span className="drawer-item-icon" aria-hidden="true">
@@ -167,11 +187,30 @@ export function DrawerItemView({
       <span className={`storage-mode-badge is-${item.storageMode}`}>
         {item.isSubdrawer ? "Subcajón" : item.storageMode === "managed" ? "Guardado" : "Vínculo"}
       </span>
+      {item.storageMode === "managed" && (
+        <button
+          className="drawer-item-drag-out"
+          type="button"
+          draggable
+          title="Arrastrar fuera del cajón. Clic para restaurar al Escritorio."
+          aria-label={`Sacar ${item.displayName} del cajón`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onDragStart={beginNativeDrag}
+          onClick={(event) => void run(event, async () => {
+            const message = await drawerApi.restoreLevelItem(drawer.id, relativePath, item.id);
+            onFeedback(message);
+          })}
+        >
+          ↗
+        </button>
+      )}
       {!item.available && <span className="unavailable-mark">No disponible</span>}
-      {menuOpen && (
+      {menuPosition && createPortal((
         <div
+          ref={menuRef}
           className="item-context-menu"
           role="menu"
+          style={{ left: menuPosition.left, top: menuPosition.top }}
           onPointerDown={(event) => event.stopPropagation()}
         >
           <button type="button" role="menuitem" onClick={(event) => void run(event, () => drawerApi.openLevelItemLocation(drawer.id, relativePath, item.id))}>
@@ -180,7 +219,7 @@ export function DrawerItemView({
           </button>
           <button type="button" role="menuitem" onClick={(event) => {
             event.stopPropagation();
-            setMenuOpen(false);
+            setMenuPosition(null);
             void navigator.clipboard.writeText(item.path)
               .then(() => onFeedback("Ruta copiada."))
               .catch(() => onFeedback("No se pudo copiar la ruta."));
@@ -234,7 +273,7 @@ export function DrawerItemView({
             </button>
           ))}
         </div>
-      )}
+      ), document.body)}
     </div>
   );
 }

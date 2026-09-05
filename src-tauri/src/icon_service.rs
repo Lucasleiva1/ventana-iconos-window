@@ -1,9 +1,11 @@
 use std::{
+    collections::HashSet,
     ffi::c_void,
     fs,
     io::BufWriter,
     mem::size_of,
     path::{Path, PathBuf},
+    time::{Duration, SystemTime},
 };
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -29,6 +31,8 @@ use std::os::windows::ffi::OsStrExt;
 
 const CACHE_VERSION: &str = "v1";
 const ICON_EDGE: i32 = 64;
+const MAX_ICON_CACHE_FILES: usize = 2_048;
+const MAX_ICON_CACHE_AGE: Duration = Duration::from_secs(90 * 24 * 60 * 60);
 
 pub struct IconService;
 
@@ -95,6 +99,11 @@ impl IconService {
         )))
     }
 
+    pub fn prune(app: &AppHandle, retained_keys: &HashSet<String>) -> Result<(), String> {
+        let directory = Self::cache_directory(app)?;
+        prune_cache_directory(&directory, retained_keys, MAX_ICON_CACHE_FILES)
+    }
+
     fn cache_path(app: &AppHandle, icon_key: &str) -> Result<PathBuf, String> {
         if icon_key.is_empty()
             || !icon_key
@@ -103,16 +112,70 @@ impl IconService {
         {
             return Err("La clave del icono no es válida".to_owned());
         }
+        Self::cache_directory(app).map(|directory| directory.join(format!("{icon_key}.png")))
+    }
+
+    fn cache_directory(app: &AppHandle) -> Result<PathBuf, String> {
         app.path()
             .app_data_dir()
-            .map(|directory| {
-                directory
-                    .join("cache")
-                    .join("icons")
-                    .join(format!("{icon_key}.png"))
-            })
+            .map(|directory| directory.join("cache").join("icons"))
             .map_err(|error| format!("No se pudo resolver la caché de iconos: {error}"))
     }
+}
+
+fn prune_cache_directory(
+    directory: &Path,
+    retained_keys: &HashSet<String>,
+    max_files: usize,
+) -> Result<(), String> {
+    let entries = match fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(format!(
+                "No se pudo revisar la caché {}: {error}",
+                directory.display()
+            ));
+        }
+    };
+    let mut cached = Vec::new();
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        if path.extension().and_then(|value| value.to_str()) == Some("tmp") {
+            let _ = fs::remove_file(path);
+            continue;
+        }
+        if path.extension().and_then(|value| value.to_str()) != Some("png") {
+            continue;
+        }
+        let key = path
+            .file_stem()
+            .map(|value| value.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let modified = entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+        cached.push((path, key, modified));
+    }
+
+    cached.sort_by_key(|(_, _, modified)| *modified);
+    let mut remaining = cached.len();
+    for (path, key, modified) in cached {
+        if retained_keys.contains(&key) {
+            continue;
+        }
+        let expired = SystemTime::now()
+            .duration_since(modified)
+            .is_ok_and(|age| age > MAX_ICON_CACHE_AGE);
+        if (remaining > max_files || expired) && fs::remove_file(&path).is_ok() {
+            remaining = remaining.saturating_sub(1);
+        }
+    }
+    Ok(())
 }
 
 fn extract_windows_icon(path: &Path, destination: &Path) -> Result<(), String> {
@@ -236,9 +299,9 @@ fn extract_windows_icon(path: &Path, destination: &Path) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{collections::HashSet, fs};
 
-    use super::extract_windows_icon;
+    use super::{extract_windows_icon, prune_cache_directory};
     use uuid::Uuid;
 
     #[test]
@@ -255,5 +318,25 @@ mod tests {
         assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
 
         fs::remove_file(destination).expect("test icon should be removed");
+    }
+
+    #[test]
+    fn cache_pruning_keeps_referenced_icons_and_limits_obsolete_entries() {
+        let root = std::env::temp_dir().join(format!("desktop-organizer-icons-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("cache fixture should exist");
+        for index in 0..5 {
+            fs::write(root.join(format!("v1-{index}.png")), b"png")
+                .expect("cache fixture should be writable");
+        }
+        fs::write(root.join("unfinished.tmp"), b"temporary")
+            .expect("temporary fixture should be writable");
+        let retained = HashSet::from(["v1-0".to_owned()]);
+
+        prune_cache_directory(&root, &retained, 2).expect("cache pruning should work");
+
+        assert!(root.join("v1-0.png").is_file());
+        assert!(!root.join("unfinished.tmp").exists());
+        assert!(fs::read_dir(&root).expect("cache should read").count() <= 2);
+        fs::remove_dir_all(root).expect("cache fixture should be removed");
     }
 }

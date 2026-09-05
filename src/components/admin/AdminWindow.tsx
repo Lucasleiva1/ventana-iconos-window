@@ -3,6 +3,7 @@ import { useAppState } from "../../hooks/useAppState";
 import { drawerApi } from "../../services/drawerApi";
 import type { Drawer, MonitorInfo, Preferences, RecoveryStatus } from "../../types/drawer";
 import { DrawerCard } from "./DrawerCard";
+import { DockSettings } from "./DockSettings";
 
 export function AdminWindow() {
   const { state, error } = useAppState();
@@ -113,6 +114,14 @@ export function AdminWindow() {
     });
   }
 
+  async function copyDrawersPath() {
+    if (!recovery) return;
+    await runAction(async () => {
+      await navigator.clipboard.writeText(recovery.storage.drawers);
+      setActionMessage("Ruta de Cajones copiada al portapapeles.");
+    });
+  }
+
   return (
     <main className="admin-shell">
       <header className="admin-header">
@@ -140,6 +149,9 @@ export function AdminWindow() {
           <button className="button button-ghost" onClick={() => void runAction(() => drawerApi.openDrawersRoot())}>
             Abrir carpeta Cajones
           </button>
+          <button className="button button-ghost" disabled={!recovery} onClick={() => void copyDrawersPath()}>
+            Copiar ruta
+          </button>
           <button className="button button-secondary" onClick={() => void exportConfiguration()}>
             Exportar configuración
           </button>
@@ -151,6 +163,8 @@ export function AdminWindow() {
           </button>
         </div>
       </section>
+
+      {recovery?.notice && <div className="success-banner" role="status">{recovery.notice}</div>}
 
       <section ref={generalSettings} id="general-settings" className="general-settings-panel" aria-labelledby="general-settings-heading">
         <div>
@@ -173,6 +187,8 @@ export function AdminWindow() {
           </label>
         </div>
       </section>
+
+      <DockSettings monitors={monitors} onError={setActionError} onMessage={setActionMessage} />
 
       {recovery && recovery.recoverableDrawers > 0 && (
         <section className="recovery-panel" aria-labelledby="recovery-heading">

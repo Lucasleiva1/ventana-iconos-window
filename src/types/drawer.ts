@@ -128,6 +128,7 @@ export interface RecoveryStatus {
   masterSaveExists: boolean;
   recoverableDrawers: number;
   storage: StoragePathsInfo;
+  notice: string | null;
 }
 
 export interface ItemActionResult {

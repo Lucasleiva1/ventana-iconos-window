@@ -74,6 +74,8 @@ export const drawerApi = {
     invoke<DrawerLevel>("reorder_drawer_level", { drawerId, relativePath, orderedItemIds }),
   restoreLevelItem: (drawerId: string, relativePath: string, itemId: string) =>
     invoke<string>("restore_level_item", { drawerId, relativePath, itemId }),
+  beginNativeItemDrag: (drawerId: string, relativePath: string, itemId: string) =>
+    invoke<void>("begin_native_item_drag", { drawerId, relativePath, itemId }),
   moveItemBetweenLevels: (
     sourceDrawerId: string,
     sourceRelativePath: string,
@@ -118,6 +120,8 @@ export const drawerApi = {
     }),
   onStateChanged: (callback: (state: PersistedState) => void) =>
     listen<PersistedState>(STATE_CHANGED_EVENT, (event) => callback(event.payload)),
+  onFeedback: (callback: (message: string) => void) =>
+    listen<string>("drawers:feedback", (event) => callback(event.payload)),
   onFocusNewDrawer: (callback: () => void) =>
     listen("admin:focus-new-drawer", callback),
   onOpenSettings: (callback: () => void) =>

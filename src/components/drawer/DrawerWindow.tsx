@@ -56,6 +56,22 @@ export function DrawerWindow({ drawerId }: DrawerWindowProps) {
   }, [drawer?.updatedAt, drawerId]);
 
   useEffect(() => {
+    let active = true;
+    let unlisten: (() => void) | undefined;
+    void drawerApi.onFeedback((message) => {
+      showFeedback(message);
+      void loadLevel(relativePath);
+    }).then((stopListening) => {
+      if (active) unlisten = stopListening;
+      else stopListening();
+    });
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+  }, [drawerId, loadLevel, relativePath]);
+
+  useEffect(() => {
     const appWindow = getCurrentWindow();
     let active = true;
     const unlisteners: Array<() => void> = [];
