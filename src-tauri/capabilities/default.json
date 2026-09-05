@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop-windows",
+  "description": "Acceso mínimo para las ventanas locales del administrador y los cajones.",
+  "windows": ["admin", "drawer-*"],
+  "permissions": ["core:default"]
+}
+
