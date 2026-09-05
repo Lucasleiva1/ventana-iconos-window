@@ -7,6 +7,8 @@ mod item_repository;
 mod level_commands;
 mod model;
 mod monitor_service;
+mod panel_commands;
+mod panel_service;
 mod persistence;
 mod shell_service;
 mod shortcut_service;
@@ -100,6 +102,12 @@ pub fn run() {
                 item_repository::sync_drawer(drawer, startup_now).map_err(std::io::Error::other)?;
                 monitor_service::normalize_drawer(drawer, &monitors);
             }
+            for panel in &mut persisted.panels {
+                monitor_service::normalize_panel(panel, &monitors);
+                for item in &mut panel.items {
+                    item.available = item.path.exists();
+                }
+            }
             let dock_warnings =
                 dock_repository::reconcile_startup(&mut persisted.dock, &storage, startup_now)
                     .map_err(std::io::Error::other)?;
@@ -119,6 +127,14 @@ pub fn run() {
                     .dock
                     .items
                     .iter()
+                    .filter(|item| !item.icon_key.is_empty())
+                    .map(|item| item.icon_key.clone()),
+            );
+            retained_icon_keys.extend(
+                persisted
+                    .panels
+                    .iter()
+                    .flat_map(|panel| panel.items.iter())
                     .filter(|item| !item.icon_key.is_empty())
                     .map(|item| item.icon_key.clone()),
             );
@@ -164,6 +180,10 @@ pub fn run() {
                     }
                 }
             }
+
+            // Los Paneles se restauran después de los Cajones y antes del Dock:
+            // pertenecen al escritorio y no deben quedar por encima del tirador.
+            panel_service::restore_panels(&app_handle, &persisted.panels, &monitors);
 
             // El Dock se crea después de los Cajones: si algo suyo falla, los
             // cajones ya quedaron restaurados. Y antes de mostrar el
@@ -272,6 +292,24 @@ pub fn run() {
             dock_commands::get_dock_item_icon,
             dock_commands::refresh_dock_availability,
             dock_commands::relayout_dock,
+            panel_commands::create_panel,
+            panel_commands::update_panel,
+            panel_commands::delete_panel,
+            panel_commands::set_panel_hidden,
+            panel_commands::set_all_panels_hidden,
+            panel_commands::begin_panel_drag,
+            panel_commands::record_panel_geometry,
+            panel_commands::relayout_panel,
+            panel_commands::add_panel_items,
+            panel_commands::add_panel_drawer,
+            panel_commands::remove_panel_item,
+            panel_commands::rename_panel_item,
+            panel_commands::reorder_panel_items,
+            panel_commands::open_panel_item,
+            panel_commands::open_panel_item_location,
+            panel_commands::repair_panel_item,
+            panel_commands::get_panel_item_icon,
+            panel_commands::refresh_panel_availability,
         ])
         .on_window_event(|window, event| {
             let is_dock_window = window.label() == dock_service::DOCK_WINDOW
@@ -293,6 +331,44 @@ pub fn run() {
                             && let Err(error) = dock_service::relayout(app, &mut dock)
                         {
                             eprintln!("No se pudo recolocar el Dock: {error}");
+                        }
+                    }
+                    _ => {}
+                }
+                return;
+            }
+            if let Some(panel_id) = panel_service::panel_id_from_label(window.label()) {
+                match event {
+                    // Cerrar un Panel lo oculta: nunca lo elimina.
+                    WindowEvent::CloseRequested { api, .. } => {
+                        api.prevent_close();
+                        if let Err(error) = window.hide() {
+                            eprintln!("No se pudo ocultar la ventana del panel: {error}");
+                        }
+                        panel_commands::mark_panel_hidden(window.app_handle(), panel_id);
+                    }
+                    // Cambió el DPI o el monitor: el Panel se reajusta solo para
+                    // no quedar fuera del área útil.
+                    WindowEvent::ScaleFactorChanged { .. } => {
+                        let app = window.app_handle();
+                        let monitors = window.available_monitors().unwrap_or_default();
+                        let target = panel_id.to_owned();
+                        let updated = app.state::<AppState>().update(move |app_state| {
+                            if let Some(panel) =
+                                app_state.panels.iter_mut().find(|panel| panel.id == target)
+                            {
+                                monitor_service::normalize_panel(panel, &monitors);
+                            }
+                            Ok(())
+                        });
+                        if let Ok(snapshot) = updated
+                            && let Some(panel) =
+                                snapshot.panels.iter().find(|panel| panel.id == panel_id)
+                            && let Some(panel_window) = app
+                                .get_webview_window(&panel_service::panel_window_label(panel_id))
+                        {
+                            let _ = panel_service::apply_panel_window_state(&panel_window, panel);
+                            let _ = panel_service::apply_panel_size(&panel_window, panel);
                         }
                     }
                     _ => {}

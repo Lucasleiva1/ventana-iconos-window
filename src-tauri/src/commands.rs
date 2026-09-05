@@ -1137,6 +1137,7 @@ mod tests {
             drawers: vec![current_drawer],
             preferences: Default::default(),
             dock: Default::default(),
+            panels: Vec::new(),
         };
         let imported = PersistedState {
             schema_version: SCHEMA_VERSION,
@@ -1147,6 +1148,7 @@ mod tests {
                 start_silently: false,
             },
             dock: Default::default(),
+            panels: Vec::new(),
         };
         merge_imported_state(&mut current, imported, Path::new("C:\\Cajones"), 3)
             .expect("merge should work");

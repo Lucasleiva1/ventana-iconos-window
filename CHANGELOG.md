@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased — Paneles organizadores (Parte 7)
+
+Versión de trabajo `0.3.0`. Todavía no se publica ninguna Release: el módulo
+Paneles se publica al cerrar la Parte 8.
+
+### Agregado
+
+- Paneles organizadores adaptativos: ventanas propias del escritorio, movibles
+  y redimensionables libremente por bordes y esquinas.
+- Escalado automático del tamaño de icono según el tamaño del Panel, con piso
+  de 24 px y scroll cuando el contenido ya no entra.
+- Grilla responsive con columnas automáticas y texto que se adapta al espacio:
+  nombre completo, nombre corto o sólo icono con tooltip.
+- Arrastrar programas, accesos directos, carpetas y archivos desde Windows a un
+  Panel. Todo queda como referencia: el original nunca se mueve.
+- Reordenamiento por arrastre con orden persistente y punto de inserción visible.
+- Menú por elemento: Abrir, Abrir ubicación, Renombrar en el panel, Buscar nueva
+  ubicación cuando está roto y Quitar del panel.
+- Bloqueo del Panel: sin mover ni redimensionar, pero los elementos siguen
+  funcionando.
+- Color, opacidad, ocultar y eliminar por Panel. Eliminar borra sólo el panel.
+- Cajones colocables dentro de un Panel; doble clic los muestra y los trae al frente.
+- Sección PANELES en el Administrador y en el System Tray existente.
+
+### Cambiado
+
+- `schemaVersion` pasa de 6 a 7. Los saves de `v0.2.1` se migran solos y
+  conservan cajones, Dock, preferencias y archivos.
+- La caché de iconos conserva también los iconos usados por los Paneles.
+
 ## 0.2.1 — 2026-09-05
 
 ### Agregado

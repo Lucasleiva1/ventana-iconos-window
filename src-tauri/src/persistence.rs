@@ -476,6 +476,7 @@ mod tests {
             )],
             preferences: Default::default(),
             dock: Default::default(),
+            panels: Vec::new(),
         };
         PersistenceService::save_to_path(&first, &paths.master_save, Some(&paths))
             .expect("first save should work");
@@ -523,6 +524,7 @@ mod tests {
             )],
             preferences: Default::default(),
             dock: Default::default(),
+            panels: Vec::new(),
         };
         PersistenceService::save_to_path(&state, &paths.master_save, Some(&paths))
             .expect("valid state should be saved and backed up");

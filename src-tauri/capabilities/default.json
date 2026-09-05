@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "desktop-windows",
-  "description": "Acceso mínimo para el administrador, los cajones, el Dock y su tirador.",
-  "windows": ["admin", "drawer-*", "dock", "dock-handle"],
+  "description": "Acceso mínimo para el administrador, los cajones, el Dock, su tirador y los paneles.",
+  "windows": ["admin", "drawer-*", "dock", "dock-handle", "panel-*"],
   "permissions": ["core:default"]
 }
 

@@ -23,8 +23,11 @@ Dock avanzado + estabilización
 
 MÓDULO DOCK — COMPLETO
 
-PARTE 7 — PENDIENTE
-Paneles organizadores adaptativos
+PARTE 7 — COMPLETADA
+Paneles organizadores adaptativos funcionales
+
+PARTE 8 — PENDIENTE
+Paneles avanzados + Release v0.3.0
 ```
 
 La versión `0.2.1` incorpora el actualizador integrado, almacenamiento físico
@@ -55,3 +58,27 @@ del Dock y prioridad visual compatible con fullscreen.
 - Esquema 6 compatible con todos los accesos creados durante Parte 5.
 
 No se implementaron Paneles, múltiples docks ni orientación vertical/superior; pertenecen a etapas posteriores.
+
+## Qué entró en la Parte 7
+
+- Cada Panel es una ventana Tauri propia (`panel-<id>`), movible con la cabecera
+  y redimensionable de verdad por bordes y esquinas. Nunca `always_on_top` y
+  fuera de la barra de tareas.
+- Escalado automático de iconos: 64 → 56 → 48 → 40 → 32 → 24 px según el tamaño
+  del Panel, con `ResizeObserver` y `requestAnimationFrame`. Al llegar al mínimo
+  de 24 px los iconos dejan de achicarse y aparece scroll.
+- Grilla CSS con columnas calculadas automáticamente y texto adaptativo:
+  nombre completo, nombre corto o sólo icono con tooltip.
+- Todos los elementos del Panel son **referencias**: arrastrar algo a un Panel
+  jamás mueve, copia ni borra el original.
+- Máximo real por monitor: área útil menos un margen de seguridad, recalculado
+  al cambiar de monitor, resolución o DPI. Un Panel cuyo monitor desaparece
+  vuelve al principal.
+- Reordenamiento por arrastre con orden persistente, renombrado visual,
+  reparación de accesos rotos y bloqueo del Panel.
+- Cajones como elemento especial dentro de un Panel: doble clic los trae al frente.
+- Sección PANELES en el Administrador y en el System Tray, sin duplicar el icono.
+- `schemaVersion` 7 con migración automática desde el esquema 6 de `v0.2.1`.
+
+No se implementaron snapping, layouts guardados, paneles anidados, colocación
+libre por coordenadas ni la Release `v0.3.0`; pertenecen a la Parte 8.

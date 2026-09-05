@@ -59,6 +59,7 @@ export interface PersistedState {
   schemaVersion: number;
   drawers: Drawer[];
   preferences: Preferences;
+  panels: import("./panel").Panel[];
 }
 
 export interface Preferences {

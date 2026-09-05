@@ -3,7 +3,8 @@ use tauri::{Monitor, WebviewWindow};
 
 use crate::model::{
     COLLAPSED_HEIGHT, DEFAULT_DRAWER_HEIGHT, DEFAULT_DRAWER_WIDTH, Drawer, MIN_DRAWER_HEIGHT,
-    MIN_DRAWER_WIDTH,
+    MIN_DRAWER_WIDTH, PANEL_DEFAULT_HEIGHT, PANEL_DEFAULT_WIDTH, PANEL_MIN_HEIGHT,
+    PANEL_MIN_WIDTH, PANEL_SAFETY_MARGIN, Panel,
 };
 
 const WORK_AREA_MARGIN_PHYSICAL: i32 = 8;
@@ -106,22 +107,79 @@ pub fn default_placement(
     Ok((x, y, monitor_id(&monitor)))
 }
 
-pub fn target_monitor<'a>(drawer: &Drawer, monitors: &'a [Monitor]) -> Option<&'a Monitor> {
+/// Monitor donde vive una ventana: primero por identificador guardado, después
+/// por la posición real, y como último recurso el primero disponible. Es la
+/// regla común a Cajones y Paneles, y también la que devuelve un contenedor al
+/// monitor principal cuando el suyo se desconectó.
+pub fn monitor_for<'a>(
+    saved_monitor_id: &str,
+    x: i32,
+    y: i32,
+    monitors: &'a [Monitor],
+) -> Option<&'a Monitor> {
     monitors
         .iter()
-        .find(|monitor| monitor_id(monitor) == drawer.monitor_id)
+        .find(|monitor| monitor_id(monitor) == saved_monitor_id)
         .or_else(|| {
             monitors.iter().find(|monitor| {
                 let area = monitor.work_area();
                 let right = i64::from(area.position.x) + i64::from(area.size.width);
                 let bottom = i64::from(area.position.y) + i64::from(area.size.height);
-                i64::from(drawer.x) >= i64::from(area.position.x)
-                    && i64::from(drawer.x) < right
-                    && i64::from(drawer.y) >= i64::from(area.position.y)
-                    && i64::from(drawer.y) < bottom
+                i64::from(x) >= i64::from(area.position.x)
+                    && i64::from(x) < right
+                    && i64::from(y) >= i64::from(area.position.y)
+                    && i64::from(y) < bottom
             })
         })
         .or_else(|| monitors.first())
+}
+
+pub fn target_monitor<'a>(drawer: &Drawer, monitors: &'a [Monitor]) -> Option<&'a Monitor> {
+    monitor_for(&drawer.monitor_id, drawer.x, drawer.y, monitors)
+}
+
+/// Máximo real de un Panel: el área útil del monitor menos un margen de
+/// seguridad. No es un porcentaje arbitrario, es lo que Windows deja libre.
+pub fn panel_limits(monitor: &Monitor) -> (f64, f64) {
+    let scale = monitor.scale_factor().max(0.1);
+    let area = monitor.work_area();
+    let width = (f64::from(area.size.width) / scale - PANEL_SAFETY_MARGIN * 2.0)
+        .max(PANEL_MIN_WIDTH);
+    let height = (f64::from(area.size.height) / scale - PANEL_SAFETY_MARGIN * 2.0)
+        .max(PANEL_MIN_HEIGHT);
+    (width, height)
+}
+
+/// Deja el Panel dentro de su monitor: corrige tamaño, posición y monitor
+/// guardado. Cubre cambio de monitor, cambio de resolución/DPI y desconexión.
+pub fn normalize_panel(panel: &mut Panel, monitors: &[Monitor]) {
+    let Some(monitor) = monitor_for(&panel.monitor_id, panel.x, panel.y, monitors) else {
+        panel.width = panel.width.max(PANEL_MIN_WIDTH);
+        panel.height = panel.height.max(PANEL_MIN_HEIGHT);
+        return;
+    };
+
+    panel.monitor_id = monitor_id(monitor);
+    let (maximum_width, maximum_height) = panel_limits(monitor);
+    if !panel.width.is_finite() {
+        panel.width = PANEL_DEFAULT_WIDTH;
+    }
+    if !panel.height.is_finite() {
+        panel.height = PANEL_DEFAULT_HEIGHT;
+    }
+    panel.width = panel.width.clamp(PANEL_MIN_WIDTH, maximum_width);
+    panel.height = panel.height.clamp(PANEL_MIN_HEIGHT, maximum_height);
+
+    let area = monitor.work_area();
+    let scale = monitor.scale_factor().max(0.1);
+    let physical_width = (panel.width * scale).round() as i64;
+    let physical_height = (panel.height * scale).round() as i64;
+    let minimum_x = i64::from(area.position.x);
+    let minimum_y = i64::from(area.position.y);
+    let maximum_x = (minimum_x + i64::from(area.size.width) - physical_width).max(minimum_x);
+    let maximum_y = (minimum_y + i64::from(area.size.height) - physical_height).max(minimum_y);
+    panel.x = i64::from(panel.x).clamp(minimum_x, maximum_x) as i32;
+    panel.y = i64::from(panel.y).clamp(minimum_y, maximum_y) as i32;
 }
 
 pub fn logical_limits(monitor: &Monitor) -> (f64, f64) {

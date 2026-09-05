@@ -80,6 +80,35 @@ había sido migrado al esquema 6 por la sesión de desarrollo previa. Por eso la
 conservación física se verificó sobre datos reales y la migración pura se
 verificó de forma automatizada con fixtures de esquemas 1 y 5.
 
+## Parte 7 — Paneles organizadores
+
+Verificado con automatización real de mouse contra el binario de release, en
+1024x768 al 100 % de escala:
+
+| Prueba | Resultado |
+| --- | --- |
+| 88 — Crear panel desde el Administrador | OK. Aparece como ventana independiente de 480x320. |
+| 89 — Movimiento y persistencia de posición | OK. Tras reiniciar vuelve a la misma posición y tamaño. |
+| 90 — Resize grande | OK. Con 6 accesos en 620x460 los iconos llegan a 64 px y muestran el nombre completo. |
+| 91 — Resize medio | OK. En 360x260 bajan a tamaño intermedio y reorganizan columnas. |
+| 92 — Resize pequeño | OK. En 210x170 llegan al mínimo de 24 px y quedan sólo iconos. |
+| 93 — Scroll después del mínimo | OK. Con 61 accesos en 230x190 aparece scroll vertical y los iconos no siguen achicándose. |
+| 94 — Muchos elementos | OK con 61 accesos: grilla de 11 columnas, resize fluido y scroll. |
+| 95 — Drag desde Windows | OK. Archivos y carpetas se agregan como referencias. |
+| 96 — Archivo del Escritorio | **OK.** El archivo se agregó al Panel y siguió existiendo en el Escritorio. |
+| 97 — Abrir con doble clic | OK. Abre con la aplicación predeterminada de Windows. |
+| 99 — Bloquear panel | OK. Windows quita el borde redimensionable y la cabecera deja de moverlo. |
+| 102 — Single instance | OK. Ejecutar el binario otra vez sólo trae el Administrador al frente. |
+| 103 — Cajones | OK. Se restauran y siguen funcionando. |
+| 104 — Dock | OK. El tirador sigue abriendo y cerrando el Dock. |
+| Migración | OK. Un save `schemaVersion` 6 de `v0.2.1` pasó a 7 conservando cajones, Dock y preferencias. |
+
+### Pendiente de validación por falta de hardware
+
+Escalas DPI de 125 % y 150 %, varios monitores y desconexión en caliente del
+monitor de un Panel. La lógica recalcula límites y devuelve el Panel al monitor
+principal por diseño.
+
 ## Limitaciones de validación
 
 - No se simula un corte eléctrico real durante una copia. Se prueban fallos controlados manteniendo el origen.

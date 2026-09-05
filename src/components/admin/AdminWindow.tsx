@@ -6,6 +6,7 @@ import { drawerApi } from "../../services/drawerApi";
 import type { Drawer, MonitorInfo, Preferences, RecoveryStatus } from "../../types/drawer";
 import { DrawerCard } from "./DrawerCard";
 import { DockSettings } from "./DockSettings";
+import { PanelsSection } from "./PanelsSection";
 
 type UpdatePhase = "idle" | "checking" | "available" | "downloading" | "installing" | "current" | "error";
 
@@ -381,6 +382,13 @@ export function AdminWindow() {
         </div>
       )}
       {actionMessage && <div className="success-banner" role="status">{actionMessage}</div>}
+
+      <PanelsSection
+        panels={state?.panels ?? []}
+        monitors={monitors}
+        onError={setActionError}
+        onMessage={setActionMessage}
+      />
 
       <section className="drawers-section" aria-labelledby="drawers-heading">
         <div className="section-heading">

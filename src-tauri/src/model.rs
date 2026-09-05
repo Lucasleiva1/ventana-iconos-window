@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub const SCHEMA_VERSION: u32 = 6;
+pub const SCHEMA_VERSION: u32 = 7;
 pub const DEFAULT_DRAWER_WIDTH: f64 = 460.0;
 pub const DEFAULT_DRAWER_HEIGHT: f64 = 300.0;
 pub const COLLAPSED_HEIGHT: f64 = 48.0;
@@ -11,6 +11,20 @@ pub const MIN_DRAWER_WIDTH: f64 = 260.0;
 pub const MIN_DRAWER_HEIGHT: f64 = 120.0;
 pub const MIN_OPACITY: f64 = 0.45;
 pub const DEFAULT_COLOR: &str = "#293548";
+
+// --- Paneles organizadores -------------------------------------------------
+pub const PANEL_DEFAULT_WIDTH: f64 = 480.0;
+pub const PANEL_DEFAULT_HEIGHT: f64 = 320.0;
+/// Alto de la cabecera del Panel en píxeles lógicos. Debe coincidir con el CSS.
+pub const PANEL_HEADER_HEIGHT: f64 = 34.0;
+/// Mínimo funcional: cabecera + una fila de iconos mínimos + separación.
+/// Con esto el Panel siempre se puede volver a agarrar y volver a agrandar.
+pub const PANEL_MIN_WIDTH: f64 = 180.0;
+pub const PANEL_MIN_HEIGHT: f64 = PANEL_HEADER_HEIGHT + 86.0;
+pub const PANEL_MIN_OPACITY: f64 = 0.35;
+pub const DEFAULT_PANEL_OPACITY: f64 = 0.94;
+/// Margen de seguridad respecto del área útil real del monitor.
+pub const PANEL_SAFETY_MARGIN: f64 = 12.0;
 
 /// Ancho lógico mínimo del Dock: el estado vacío necesita espacio para su mensaje.
 pub const DOCK_MIN_WIDTH: f64 = 360.0;
@@ -354,6 +368,109 @@ pub struct DockPatch {
     pub hide_after_open: Option<bool>,
 }
 
+/// Acceso de un Panel organizador.
+///
+/// Los Paneles son **siempre referencias**: comparten con `DrawerItem` y
+/// `DockItem` el tipo de elemento y la clave de icono, pero jamás administran
+/// almacenamiento físico. Agregar algo a un Panel nunca mueve ni copia el
+/// original.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelItem {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub item_type: DrawerItemType,
+    pub display_name: String,
+    pub path: PathBuf,
+    pub icon_key: String,
+    pub order: u32,
+    #[serde(default = "default_true")]
+    pub available: bool,
+    /// Cuando el elemento representa un Cajón, guarda su identificador estable.
+    #[serde(default)]
+    pub drawer_id: Option<String>,
+    #[serde(default)]
+    pub created_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Panel {
+    pub id: String,
+    pub name: String,
+    pub x: i32,
+    pub y: i32,
+    pub width: f64,
+    pub height: f64,
+    #[serde(default)]
+    pub monitor_id: String,
+    #[serde(default)]
+    pub locked: bool,
+    #[serde(default)]
+    pub hidden: bool,
+    #[serde(default = "default_panel_color")]
+    pub color: String,
+    #[serde(default = "default_panel_opacity")]
+    pub opacity: f64,
+    /// En la Parte 7 el tamaño de icono siempre se deriva del tamaño del Panel.
+    /// El campo queda preparado para un modo manual en la Parte 8.
+    #[serde(default = "default_true")]
+    pub auto_icon_size: bool,
+    #[serde(default)]
+    pub items: Vec<PanelItem>,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+impl Panel {
+    pub fn new(name: String, x: i32, y: i32, monitor_id: String, now: u64) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            name,
+            x,
+            y,
+            width: PANEL_DEFAULT_WIDTH,
+            height: PANEL_DEFAULT_HEIGHT,
+            monitor_id,
+            locked: false,
+            hidden: false,
+            color: DEFAULT_COLOR.to_owned(),
+            opacity: DEFAULT_PANEL_OPACITY,
+            auto_icon_size: true,
+            items: Vec::new(),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelPatch {
+    pub name: Option<String>,
+    pub locked: Option<bool>,
+    pub color: Option<String>,
+    pub opacity: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelGeometryInput {
+    pub id: String,
+    pub x: i32,
+    pub y: i32,
+    pub width: f64,
+    pub height: f64,
+}
+
+fn default_panel_color() -> String {
+    DEFAULT_COLOR.to_owned()
+}
+
+const fn default_panel_opacity() -> f64 {
+    DEFAULT_PANEL_OPACITY
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersistedState {
@@ -363,6 +480,8 @@ pub struct PersistedState {
     pub preferences: Preferences,
     #[serde(default)]
     pub dock: DockState,
+    #[serde(default)]
+    pub panels: Vec<Panel>,
 }
 
 impl Default for PersistedState {
@@ -372,6 +491,7 @@ impl Default for PersistedState {
             drawers: Vec::new(),
             preferences: Preferences::default(),
             dock: DockState::default(),
+            panels: Vec::new(),
         }
     }
 }
@@ -492,6 +612,7 @@ mod tests {
             drawers: vec![drawer],
             preferences: Preferences::default(),
             dock: DockState::default(),
+            panels: Vec::new(),
         };
 
         let json = serde_json::to_string(&state).expect("test state should serialize");

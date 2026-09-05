@@ -5,7 +5,7 @@ use tauri::{
 };
 
 use crate::{
-    commands, dock_commands, shell_service::ShellService, storage_service::StorageService,
+    commands, dock_commands, panel_commands, shell_service::ShellService, storage_service::StorageService,
     window_service,
 };
 
@@ -18,6 +18,9 @@ const HIDE_ALL: &str = "hide_all";
 const OPEN_DRAWERS: &str = "open_drawers";
 const SHOW_DOCK: &str = "show_dock";
 const HIDE_DOCK: &str = "hide_dock";
+const NEW_PANEL: &str = "new_panel";
+const SHOW_PANELS: &str = "show_panels";
+const HIDE_PANELS: &str = "hide_panels";
 const SETTINGS: &str = "settings";
 const QUIT: &str = "quit";
 
@@ -58,6 +61,24 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
         .map_err(|error| error.to_string())?;
     let hide_dock = MenuItem::with_id(app, HIDE_DOCK, "Ocultar Dock", true, None::<&str>)
         .map_err(|error| error.to_string())?;
+    let new_panel = MenuItem::with_id(app, NEW_PANEL, "Nuevo panel", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
+    let show_panels = MenuItem::with_id(
+        app,
+        SHOW_PANELS,
+        "Mostrar todos los paneles",
+        true,
+        None::<&str>,
+    )
+    .map_err(|error| error.to_string())?;
+    let hide_panels = MenuItem::with_id(
+        app,
+        HIDE_PANELS,
+        "Ocultar todos los paneles",
+        true,
+        None::<&str>,
+    )
+    .map_err(|error| error.to_string())?;
     let settings = MenuItem::with_id(app, SETTINGS, "Configuración", true, None::<&str>)
         .map_err(|error| error.to_string())?;
     let quit = MenuItem::with_id(app, QUIT, "Salir", true, None::<&str>)
@@ -65,6 +86,7 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
     let separator_one = PredefinedMenuItem::separator(app).map_err(|error| error.to_string())?;
     let separator_two = PredefinedMenuItem::separator(app).map_err(|error| error.to_string())?;
     let separator_dock = PredefinedMenuItem::separator(app).map_err(|error| error.to_string())?;
+    let separator_panels = PredefinedMenuItem::separator(app).map_err(|error| error.to_string())?;
     let menu = Menu::with_items(
         app,
         &[
@@ -77,6 +99,10 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
             &separator_dock,
             &show_dock,
             &hide_dock,
+            &separator_panels,
+            &new_panel,
+            &show_panels,
+            &hide_panels,
             &settings,
             &separator_two,
             &quit,
@@ -125,6 +151,9 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
         }
         SHOW_DOCK => dock_commands::set_visibility(app, true),
         HIDE_DOCK => dock_commands::set_visibility(app, false),
+        NEW_PANEL => panel_commands::create_panel_from_tray(app),
+        SHOW_PANELS => panel_commands::set_visibility_from_tray(app, false),
+        HIDE_PANELS => panel_commands::set_visibility_from_tray(app, true),
         SETTINGS => window_service::show_admin_window(app).and_then(|()| {
             app.emit("admin:open-settings", ())
                 .map_err(|error| error.to_string())
