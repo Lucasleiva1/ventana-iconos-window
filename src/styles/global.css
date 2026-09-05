@@ -1378,7 +1378,9 @@ body:has(.dock-handle-shell) #root {
   border-radius: 8px 8px 0 0;
   background: rgba(118, 138, 190, 0.34);
   opacity: var(--dock-handle-opacity, 0.42);
-  cursor: pointer;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
   transition: opacity 140ms ease, background-color 140ms ease;
 }
 
@@ -1444,6 +1446,12 @@ body:has(.dock-handle-shell) #root {
 .dock-shell.is-visible .dock-bar {
   opacity: 1;
   transform: translateY(0);
+}
+
+.dock-handle.is-dragging {
+  cursor: grabbing;
+  opacity: 1;
+  background: rgba(150, 172, 228, 0.7);
 }
 
 .dock-shell.has-blur .dock-bar {

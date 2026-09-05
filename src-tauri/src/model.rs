@@ -31,7 +31,9 @@ pub const DOCK_MAX_HANDLE_WIDTH: f64 = 160.0;
 pub const DOCK_MIN_HANDLE_HEIGHT: f64 = 8.0;
 pub const DOCK_MAX_HANDLE_HEIGHT: f64 = 36.0;
 pub const DOCK_MIN_HANDLE_OPACITY: f64 = 0.2;
-pub const DOCK_MAX_HORIZONTAL_OFFSET: f64 = 1_000.0;
+/// Margen de seguridad para desplazamientos persistidos. La posición efectiva
+/// siempre se limita al área útil del monitor, incluso en pantallas ultra-wide.
+pub const DOCK_MAX_HORIZONTAL_OFFSET: f64 = 10_000.0;
 pub const DOCK_MIN_BORDER_RADIUS: f64 = 0.0;
 pub const DOCK_MAX_BORDER_RADIUS: f64 = 32.0;
 

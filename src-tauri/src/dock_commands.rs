@@ -142,6 +142,60 @@ pub fn set_dock_visible(
     })
 }
 
+/// Desplaza el tirador durante un gesto. Actualiza memoria y ventanas en cada
+/// tramo, pero difiere la escritura a disco hasta que el usuario lo suelta.
+#[tauri::command]
+pub fn move_dock_handle(
+    delta_x: f64,
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<DockState, String> {
+    if window.label() != DOCK_HANDLE_WINDOW {
+        return Err("Sólo el tirador puede iniciar este movimiento".to_owned());
+    }
+    ensure_finite(delta_x, "desplazamiento horizontal")?;
+    let mut dock = state.snapshot()?.dock;
+    if !dock.enabled {
+        return Err("El Dock está desactivado".to_owned());
+    }
+    if !dock_service::is_ready() {
+        return Ok(dock);
+    }
+
+    dock_service::move_handle_by(&app, &mut dock, delta_x)?;
+    let moved = dock.clone();
+    state.update(move |app_state| {
+        app_state.dock.monitor_id = moved.monitor_id;
+        app_state.dock.handle_position = moved.handle_position;
+        app_state.dock.handle_offset = moved.handle_offset;
+        app_state.dock.width = moved.width;
+        app_state.dock.height = moved.height;
+        Ok(())
+    })?;
+    Ok(dock)
+}
+
+/// Guarda una sola vez la posición final de un arrastre y sincroniza las demás
+/// ventanas para que el Administrador muestre inmediatamente el valor nuevo.
+#[tauri::command]
+pub fn finish_dock_handle_drag(
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<DockState, String> {
+    if window.label() != DOCK_HANDLE_WINDOW {
+        return Err("Sólo el tirador puede finalizar este movimiento".to_owned());
+    }
+    let snapshot = state.update(|app_state| {
+        app_state.dock.updated_at = now_millis();
+        Ok(())
+    })?;
+    persist(&app, &state)?;
+    emit_dock(&app, &snapshot.dock)?;
+    Ok(snapshot.dock)
+}
+
 /// Mostrar/ocultar desde el System Tray o desde cualquier punto interno.
 pub(crate) fn set_visibility(app: &AppHandle, visible: bool) -> Result<(), String> {
     let state = app.state::<AppState>();

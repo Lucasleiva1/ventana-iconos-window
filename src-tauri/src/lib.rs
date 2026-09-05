@@ -247,6 +247,8 @@ pub fn run() {
             dock_commands::get_dock_state,
             dock_commands::toggle_dock,
             dock_commands::set_dock_visible,
+            dock_commands::move_dock_handle,
+            dock_commands::finish_dock_handle_drag,
             dock_commands::update_dock_settings,
             dock_commands::set_dock_icon_size,
             dock_commands::add_dock_items,

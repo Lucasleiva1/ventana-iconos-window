@@ -182,6 +182,58 @@ fn existing_or_error(app: &AppHandle, label: &str, error: String) -> Result<Webv
     app.get_webview_window(label).ok_or(error)
 }
 
+fn handle_anchor_x(
+    position: DockHandlePosition,
+    area_left: i32,
+    area_right: i32,
+    handle_width: i32,
+    side_margin: i32,
+) -> i32 {
+    match position {
+        DockHandlePosition::Left => area_left + side_margin,
+        DockHandlePosition::Center => area_left + (area_right - area_left - handle_width) / 2,
+        DockHandlePosition::Right => area_right - side_margin - handle_width,
+    }
+}
+
+fn aligned_dock_x(
+    handle_x: i32,
+    handle_width: i32,
+    dock_width: i32,
+    area_left: i32,
+    area_right: i32,
+) -> i32 {
+    let desired = handle_x + handle_width / 2 - dock_width / 2;
+    desired.clamp(area_left, area_right - dock_width)
+}
+
+fn store_handle_position(
+    dock: &mut DockState,
+    handle_x: i32,
+    scale: f64,
+    area_left: i32,
+    area_right: i32,
+    handle_width: i32,
+    side_margin: i32,
+) {
+    let candidates = [
+        DockHandlePosition::Left,
+        DockHandlePosition::Center,
+        DockHandlePosition::Right,
+    ];
+    let (position, anchor) = candidates
+        .into_iter()
+        .map(|position| {
+            let anchor =
+                handle_anchor_x(position, area_left, area_right, handle_width, side_margin);
+            (position, anchor)
+        })
+        .min_by_key(|(_, anchor)| i64::from(handle_x).abs_diff(i64::from(*anchor)))
+        .unwrap_or((DockHandlePosition::Center, handle_x));
+    dock.handle_position = position;
+    dock.handle_offset = f64::from(handle_x - anchor) / scale;
+}
+
 /// Destruye las ventanas del Dock. Se usa al desactivarlo desde el
 /// Administrador; `destroy` evita el manejador de cierre que las conserva.
 pub fn destroy_windows(app: &AppHandle) {
@@ -212,17 +264,23 @@ fn layout(app: &AppHandle, dock: &mut DockState) -> Result<(), String> {
     let area_bottom = area.position.y + i32::try_from(area.size.height).unwrap_or(i32::MAX);
 
     let side_margin = (16.0 * scale).round() as i32;
-    let anchored_x = match dock.handle_position {
-        DockHandlePosition::Left => area.position.x + side_margin,
-        DockHandlePosition::Center => {
-            area.position.x + (area_right - area.position.x - handle_width) / 2
-        }
-        DockHandlePosition::Right => area_right - side_margin - handle_width,
-    };
+    let anchored_x = handle_anchor_x(
+        dock.handle_position,
+        area.position.x,
+        area_right,
+        handle_width,
+        side_margin,
+    );
     let requested_handle_x = anchored_x + (dock.handle_offset * scale).round() as i32;
     let handle_x = requested_handle_x.clamp(area.position.x, area_right - handle_width);
     let handle_y = area_bottom - handle_height;
-    let dock_x = area.position.x + (area_right - area.position.x - dock_width) / 2;
+    let dock_x = aligned_dock_x(
+        handle_x,
+        handle_width,
+        dock_width,
+        area.position.x,
+        area_right,
+    );
     let dock_y =
         (handle_y - dock_height - (DOCK_HANDLE_GAP * scale).round() as i32).max(area.position.y);
 
@@ -243,6 +301,53 @@ fn layout(app: &AppHandle, dock: &mut DockState) -> Result<(), String> {
             .map_err(|error| format!("No se pudo ubicar el Dock: {error}"))?;
     }
     Ok(())
+}
+
+/// Mueve el tirador sólo sobre el eje horizontal del monitor elegido.
+///
+/// `delta_x_logical` llega desde `PointerEvent.screenX`, que usa píxeles
+/// lógicos. La conversión al DPI del monitor se hace acá y la posición real se
+/// normaliza tras cada movimiento para que arrastrar contra un borde no deje
+/// un desplazamiento acumulado invisible.
+pub fn move_handle_by(
+    app: &AppHandle,
+    dock: &mut DockState,
+    delta_x_logical: f64,
+) -> Result<(), String> {
+    let Some(monitor) = resolve_monitor(app, dock)? else {
+        return Ok(());
+    };
+    let scale = monitor.scale_factor().max(0.1);
+    let area = monitor.work_area();
+    let area_right = area.position.x + i32::try_from(area.size.width).unwrap_or(i32::MAX);
+    let handle_width = (dock.handle_width * scale).round().max(1.0) as i32;
+    let side_margin = (16.0 * scale).round() as i32;
+    let fallback_x = handle_anchor_x(
+        dock.handle_position,
+        area.position.x,
+        area_right,
+        handle_width,
+        side_margin,
+    ) + (dock.handle_offset * scale).round() as i32;
+    let current_x = app
+        .get_webview_window(DOCK_HANDLE_WINDOW)
+        .and_then(|window| window.outer_position().ok())
+        .map_or(fallback_x, |position| position.x);
+    let delta_physical = (delta_x_logical * scale).round() as i32;
+    let handle_x = current_x
+        .saturating_add(delta_physical)
+        .clamp(area.position.x, area_right - handle_width);
+
+    store_handle_position(
+        dock,
+        handle_x,
+        scale,
+        area.position.x,
+        area_right,
+        handle_width,
+        side_margin,
+    );
+    layout(app, dock)
 }
 
 fn cancel_pending_hide() -> u64 {
@@ -349,7 +454,7 @@ pub fn relayout(app: &AppHandle, dock: &mut DockState) -> Result<(), String> {
 mod tests {
     use std::path::PathBuf;
 
-    use super::logical_size;
+    use super::{aligned_dock_x, logical_size};
     use crate::model::{DockItem, DockItemKind, DockState, DockWidthMode, DrawerItemType};
 
     fn item(index: u32, kind: DockItemKind) -> DockItem {
@@ -410,5 +515,20 @@ mod tests {
 
         assert!(separator_width <= shortcut_width);
         assert!(separator_width >= crate::model::DOCK_MIN_WIDTH);
+    }
+
+    #[test]
+    fn dock_follows_a_centered_handle() {
+        assert_eq!(aligned_dock_x(931, 58, 480, 0, 1920), 720);
+    }
+
+    #[test]
+    fn dock_stays_fully_visible_at_the_left_edge() {
+        assert_eq!(aligned_dock_x(0, 58, 480, 0, 1920), 0);
+    }
+
+    #[test]
+    fn dock_stays_fully_visible_at_the_right_edge() {
+        assert_eq!(aligned_dock_x(1862, 58, 480, 0, 1920), 1440);
     }
 }

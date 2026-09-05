@@ -11,6 +11,9 @@ export const dockApi = {
   getState: () => invoke<DockState>("get_dock_state"),
   toggle: () => invoke<DockState>("toggle_dock"),
   setVisible: (visible: boolean) => invoke<DockState>("set_dock_visible", { visible }),
+  moveHandle: (deltaX: number) =>
+    invoke<DockState>("move_dock_handle", { deltaX }),
+  finishHandleDrag: () => invoke<DockState>("finish_dock_handle_drag"),
   updateSettings: (patch: DockPatch) => invoke<DockState>("update_dock_settings", { patch }),
   setIconSize: (iconSize: DrawerIconSize) =>
     invoke<DockState>("set_dock_icon_size", { iconSize }),

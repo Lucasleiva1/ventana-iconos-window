@@ -127,7 +127,7 @@ export function DockSettings({ monitors, onError, onMessage }: DockSettingsProps
         </label>
 
         <label className="preference-row">
-          <span><strong>Posición del tirador</strong><small>Dentro del área útil del monitor.</small></span>
+          <span><strong>Posición del tirador</strong><small>También podés arrastrarlo de punta a punta sobre la pantalla.</small></span>
           <select value={dock?.handlePosition ?? "center"} disabled={!dock}
             onChange={(event) => void run(async () => setDock(await dockApi.updateSettings({
               handlePosition: event.target.value as DockState["handlePosition"],
@@ -140,7 +140,7 @@ export function DockSettings({ monitors, onError, onMessage }: DockSettingsProps
 
         <label className="preference-row">
           <span><strong>Ajuste fino del tirador</strong><small>{Math.round(dock?.handleOffset ?? 0)} px lógicos</small></span>
-          <input type="range" min={-400} max={400} step={5} value={dock?.handleOffset ?? 0} disabled={!dock}
+          <input type="range" min={-2000} max={2000} step={5} value={dock?.handleOffset ?? 0} disabled={!dock}
             onChange={(event) => void run(async () => setDock(await dockApi.updateSettings({ handleOffset: Number(event.target.value) })))} />
         </label>
 

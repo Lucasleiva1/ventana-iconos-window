@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { dockApi } from "../../services/dockApi";
 import { dragDropService } from "../../services/dragDropService";
 import type { DockState } from "../../types/dock";
@@ -14,6 +14,17 @@ export function DockHandle() {
   const [dock, setDock] = useState<DockState | null>(null);
   const [busy, setBusy] = useState(false);
   const [dropHover, setDropHover] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const gesture = useRef<{
+    pointerId: number;
+    startScreenX: number;
+    lastScreenX: number;
+    active: boolean;
+  } | null>(null);
+  const pendingDelta = useRef(0);
+  const moveInFlight = useRef(false);
+  const finishPending = useRef(false);
+  const suppressClick = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -65,7 +76,84 @@ export function DockHandle() {
     };
   }, []);
 
+  function finishDragWhenReady() {
+    if (!finishPending.current || moveInFlight.current || pendingDelta.current !== 0) return;
+    finishPending.current = false;
+    void dockApi.finishHandleDrag()
+      .then(setDock)
+      .catch((reason) => console.error("No se pudo guardar la posición del tirador:", reason));
+  }
+
+  function flushMove() {
+    if (moveInFlight.current) return;
+    const deltaX = pendingDelta.current;
+    if (deltaX === 0) {
+      finishDragWhenReady();
+      return;
+    }
+    pendingDelta.current = 0;
+    moveInFlight.current = true;
+    void dockApi.moveHandle(deltaX)
+      .catch((reason) => console.error("No se pudo mover el tirador:", reason))
+      .finally(() => {
+        moveInFlight.current = false;
+        flushMove();
+      });
+  }
+
+  function onPointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0 || busy) return;
+    gesture.current = {
+      pointerId: event.pointerId,
+      startScreenX: event.screenX,
+      lastScreenX: event.screenX,
+      active: false,
+    };
+    finishPending.current = false;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function onPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    const current = gesture.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    if (!current.active && Math.abs(event.screenX - current.startScreenX) < 3) return;
+    if (!current.active) {
+      current.active = true;
+      setDragging(true);
+    }
+    const deltaX = event.screenX - current.lastScreenX;
+    current.lastScreenX = event.screenX;
+    if (deltaX !== 0) {
+      pendingDelta.current += deltaX;
+      flushMove();
+    }
+    event.preventDefault();
+  }
+
+  function finishPointer(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    suppressFollowingClick: boolean,
+  ) {
+    const current = gesture.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    gesture.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (!current.active) return;
+    setDragging(false);
+    suppressClick.current = suppressFollowingClick;
+    finishPending.current = true;
+    flushMove();
+    event.preventDefault();
+  }
+
   function toggle() {
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      return;
+    }
     if (busy) return;
     setBusy(true);
     void dockApi.toggle()
@@ -80,10 +168,14 @@ export function DockHandle() {
     >
       <button
         type="button"
-        className={`dock-handle ${dock?.visible ? "is-open" : ""} ${dropHover ? "is-drop-target" : ""}`}
+        className={`dock-handle ${dock?.visible ? "is-open" : ""} ${dropHover ? "is-drop-target" : ""} ${dragging ? "is-dragging" : ""}`}
         aria-label={dock?.visible ? "Ocultar el Dock" : "Mostrar el Dock"}
         aria-expanded={dock?.visible ?? false}
-        title="Clic para mostrar u ocultar el Dock"
+        title="Clic para mostrar u ocultar · arrastrá para mover"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={(event) => finishPointer(event, true)}
+        onPointerCancel={(event) => finishPointer(event, false)}
         onClick={toggle}
       >
         <span className="dock-handle-grip" aria-hidden="true" />
