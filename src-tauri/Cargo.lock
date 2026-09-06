@@ -778,7 +778,7 @@ dependencies = [
 
 [[package]]
 name = "desktop-organizer"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "base64 0.22.1",
  "drag",
@@ -795,6 +795,7 @@ dependencies = [
  "tauri-plugin-updater",
  "uuid",
  "windows 0.61.3",
+ "winreg 0.10.1",
 ]
 
 [[package]]

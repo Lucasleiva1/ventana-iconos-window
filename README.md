@@ -80,8 +80,8 @@ Consultá [RECOVERY.md](RECOVERY.md) para recuperación manual y reinstalación.
 
 ## Instalación
 
-1. Descargá `Desktop-Organizer-v1.0.0-Setup.exe` desde GitHub Releases.
-2. Verificá su SHA-256 con `SHA256SUMS-v1.0.0.txt` de la misma Release.
+1. Descargá `Desktop-Organizer-v1.0.1-Setup.exe` desde GitHub Releases.
+2. Verificá su SHA-256 con `SHA256SUMS-v1.0.1.txt` de la misma Release.
 3. Ejecutá el instalador. La instalación es por usuario y no requiere privilegios de administrador.
 4. Abrí **Desktop Organizer** desde el menú Inicio.
 

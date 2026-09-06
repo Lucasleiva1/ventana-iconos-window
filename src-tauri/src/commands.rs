@@ -6,10 +6,10 @@ use std::{
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
-use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_dialog::DialogExt;
 
 use crate::{
+    autostart_service,
     icon_service::IconService,
     item_repository::{self, AddItemsResult},
     model::{
@@ -147,10 +147,7 @@ pub fn open_dock_root() -> Result<(), String> {
 #[tauri::command]
 pub fn get_preferences(app: AppHandle, state: State<'_, AppState>) -> Result<Preferences, String> {
     let mut preferences = state.snapshot()?.preferences;
-    preferences.start_with_windows = app
-        .autolaunch()
-        .is_enabled()
-        .map_err(|error| format!("Windows no pudo consultar el inicio automático: {error}"))?;
+    preferences.start_with_windows = autostart_service::is_enabled(&app)?;
     Ok(preferences)
 }
 
@@ -164,13 +161,9 @@ pub fn update_preferences(
     let mut next = previous.clone();
     if let Some(value) = patch.start_with_windows {
         if value {
-            app.autolaunch().enable().map_err(|error| {
-                format!("Windows no pudo habilitar el inicio automático por usuario: {error}")
-            })?;
+            autostart_service::enable(&app)?;
         } else {
-            app.autolaunch().disable().map_err(|error| {
-                format!("Windows no pudo deshabilitar el inicio automático: {error}")
-            })?;
+            autostart_service::disable(&app)?;
         }
         next.start_with_windows = value;
     }
@@ -208,9 +201,9 @@ pub fn update_preferences(
     if let Err(error) = commit(&app, &snapshot) {
         if patch.start_with_windows.is_some() {
             let rollback = if previous.start_with_windows {
-                app.autolaunch().enable()
+                autostart_service::enable(&app)
             } else {
-                app.autolaunch().disable()
+                autostart_service::disable(&app)
             };
             if let Err(rollback_error) = rollback {
                 return Err(format!(

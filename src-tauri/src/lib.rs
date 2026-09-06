@@ -1,3 +1,4 @@
+mod autostart_service;
 mod commands;
 mod dock_commands;
 mod dock_repository;
@@ -27,8 +28,6 @@ use std::{
 
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_autostart::MacosLauncher;
-#[cfg(not(debug_assertions))]
-use tauri_plugin_autostart::ManagerExt;
 
 use crate::{persistence::PersistenceService, state::AppState, storage_service::StorageService};
 
@@ -89,8 +88,7 @@ pub fn run() {
             };
             #[cfg(not(debug_assertions))]
             if persisted.preferences.start_with_windows
-                && app_handle.autolaunch().is_enabled().unwrap_or(false)
-                && let Err(error) = app_handle.autolaunch().enable()
+                && let Err(error) = autostart_service::enable(&app_handle)
             {
                 eprintln!(
                     "No se pudo actualizar la ruta del inicio automático al ejecutable actual: {error}"

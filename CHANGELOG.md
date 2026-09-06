@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.1 — 2026-09-06
+
+### Corregido
+
+- El inicio con Windows registra el ejecutable entre comillas y funciona con
+  rutas que contienen espacios.
+- La aplicación valida que la entrada apunte al ejecutable actual y la repara
+  automáticamente cuando la preferencia está activada.
+- Windows vuelve a marcar explícitamente Desktop Organizer como habilitado en
+  Aplicaciones de inicio al activar o reparar la opción.
+
+### Pruebas
+
+- Arranque local mediante `--autostart`: una sola instancia, proceso
+  respondiendo y ventanas restauradas.
+- 52 pruebas Rust, TypeScript, compilación de producción y verificación del
+  guardado maestro.
+
 ## 1.0.0 — 2026-09-06
 
 Primera versión estable. Cierra el plan de diez partes: Cajones, Dock y Paneles
