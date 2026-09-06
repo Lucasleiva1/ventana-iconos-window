@@ -994,4 +994,142 @@ mod tests {
         );
         fs::remove_dir_all(root).expect("fixtures should be removed");
     }
+
+    /// Busca un volumen distinto al de `%TEMP%` para poder ejercitar de verdad
+    /// el camino copiar-verificar-borrar. Devuelve `None` si la máquina tiene
+    /// un solo disco: la prueba se salta en lugar de dar un falso verde.
+    fn other_volume_root() -> Option<std::path::PathBuf> {
+        let temp = std::env::temp_dir();
+        let current = temp.to_string_lossy().chars().next()?.to_ascii_uppercase();
+        for letter in ['C', 'D', 'E', 'F'] {
+            if letter == current {
+                continue;
+            }
+            let candidate = std::path::PathBuf::from(format!("{letter}:\\"));
+            if !candidate.is_dir() {
+                continue;
+            }
+            let probe = candidate.join(format!("desktop-organizer-probe-{}", Uuid::new_v4()));
+            if fs::create_dir_all(&probe).is_ok() {
+                let _ = fs::remove_dir_all(&probe);
+                return Some(candidate);
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn cross_volume_move_copies_verifies_and_only_then_removes_the_source() {
+        let Some(other) = other_volume_root() else {
+            eprintln!("SALTEADO: la máquina tiene un solo volumen escribible");
+            return;
+        };
+        let source_root =
+            std::env::temp_dir().join(format!("desktop-organizer-xvol-src-{}", Uuid::new_v4()));
+        let destination_root = other.join(format!("desktop-organizer-xvol-dst-{}", Uuid::new_v4()));
+        let source = source_root.join("carpeta con espacios");
+        fs::create_dir_all(source.join("anidada")).expect("source tree should exist");
+        fs::write(source.join("documento.txt"), b"contenido real").expect("file should exist");
+        fs::write(source.join("anidada").join("hoja.bin"), vec![7u8; 512 * 1024])
+            .expect("nested file should exist");
+        fs::create_dir_all(&destination_root).expect("destination root should exist");
+        let destination = destination_root.join("carpeta con espacios");
+
+        let outcome = StorageService::move_safely(&source, &destination)
+            .expect("cross volume move should succeed");
+
+        assert!(outcome.warning.is_none(), "no debería advertir nada");
+        assert!(!source.exists(), "el origen debe desaparecer recién al final");
+        assert_eq!(
+            fs::read(destination.join("documento.txt")).expect("file should be copied"),
+            b"contenido real"
+        );
+        assert_eq!(
+            fs::read(destination.join("anidada").join("hoja.bin"))
+                .expect("nested file should be copied")
+                .len(),
+            512 * 1024
+        );
+        // Ningún archivo de staging debe sobrevivir en el destino.
+        assert!(
+            !fs::read_dir(&destination_root)
+                .expect("destination should read")
+                .filter_map(Result::ok)
+                .any(|entry| entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(super::TRANSFER_PREFIX))
+        );
+
+        let _ = fs::remove_dir_all(&source_root);
+        fs::remove_dir_all(&destination_root).expect("fixtures should be removed");
+    }
+
+    #[test]
+    fn cross_volume_conflict_never_overwrites_and_keeps_both_sides() {
+        let Some(other) = other_volume_root() else {
+            eprintln!("SALTEADO: la máquina tiene un solo volumen escribible");
+            return;
+        };
+        let source_root =
+            std::env::temp_dir().join(format!("desktop-organizer-xconf-src-{}", Uuid::new_v4()));
+        let destination_root = other.join(format!("desktop-organizer-xconf-dst-{}", Uuid::new_v4()));
+        fs::create_dir_all(&source_root).expect("source root should exist");
+        fs::create_dir_all(&destination_root).expect("destination root should exist");
+        let source = source_root.join("informe.txt");
+        let destination = destination_root.join("informe.txt");
+        fs::write(&source, b"origen").expect("source should exist");
+        fs::write(&destination, b"destino ya existente").expect("destination should exist");
+
+        assert!(StorageService::move_safely(&source, &destination).is_err());
+        assert_eq!(fs::read(&source).expect("source should remain"), b"origen");
+        assert_eq!(
+            fs::read(&destination).expect("destination should remain"),
+            b"destino ya existente"
+        );
+
+        fs::remove_dir_all(&source_root).expect("fixtures should be removed");
+        fs::remove_dir_all(&destination_root).expect("fixtures should be removed");
+    }
+
+    #[test]
+    fn unicode_and_spaced_names_survive_a_real_move_and_restore() {
+        let root =
+            std::env::temp_dir().join(format!("desktop-organizer-unicode-{}", Uuid::new_v4()));
+        let desktop = root.join("Desktop");
+        let drawer = root.join("Cajones").join("VIDEO");
+        fs::create_dir_all(&desktop).expect("desktop should exist");
+        fs::create_dir_all(&drawer).expect("drawer should exist");
+
+        for name in [
+            "Diseño",
+            "Música 2026",
+            "Ñandú",
+            "Proyecto 日本語",
+            "carpeta   con   espacios",
+        ] {
+            let source = desktop.join(name);
+            fs::create_dir_all(&source).expect("source folder should exist");
+            fs::write(source.join("archivo ñ.txt"), name.as_bytes()).expect("file should exist");
+
+            let inside = drawer.join(name);
+            StorageService::move_safely(&source, &inside).expect("move should succeed");
+            assert!(!source.exists(), "{name} debe salir del escritorio");
+            assert_eq!(
+                fs::read(inside.join("archivo ñ.txt")).expect("content should survive"),
+                name.as_bytes()
+            );
+
+            // Y tiene que poder volver al escritorio sin duplicarse.
+            StorageService::move_safely(&inside, &source).expect("restore should succeed");
+            assert!(!inside.exists(), "{name} no debe quedar duplicado en el cajón");
+            assert_eq!(
+                fs::read(source.join("archivo ñ.txt")).expect("content should survive"),
+                name.as_bytes()
+            );
+        }
+
+        fs::remove_dir_all(root).expect("fixtures should be removed");
+    }
+
 }

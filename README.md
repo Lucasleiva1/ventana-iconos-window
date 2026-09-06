@@ -1,6 +1,6 @@
 # Desktop Organizer
 
-Desktop Organizer es una aplicación nativa y local-first para Windows. Integra Cajones con almacenamiento físico, un Dock retráctil y Paneles de referencias. La versión `0.4.0` incorpora la configuración global y la recuperación integral de la Parte 9.
+Desktop Organizer es una aplicación nativa y local-first para Windows. Integra Cajones con almacenamiento físico, un Dock retráctil y Paneles de referencias. `v1.0.0` es la primera versión estable y cierra el plan completo de desarrollo.
 
 ## Qué incluye
 
@@ -80,12 +80,34 @@ Consultá [RECOVERY.md](RECOVERY.md) para recuperación manual y reinstalación.
 
 ## Instalación
 
-1. Descargá `Desktop-Organizer-v0.4.0-Setup.exe` desde GitHub Releases.
-2. Verificá su SHA-256 con `SHA256SUMS-v0.4.0.txt` de la misma Release.
+1. Descargá `Desktop-Organizer-v1.0.0-Setup.exe` desde GitHub Releases.
+2. Verificá su SHA-256 con `SHA256SUMS-v1.0.0.txt` de la misma Release.
 3. Ejecutá el instalador. La instalación es por usuario y no requiere privilegios de administrador.
 4. Abrí **Desktop Organizer** desde el menú Inicio.
 
-Windows puede mostrar una advertencia de SmartScreen porque esta primera versión no posee certificado comercial de firma de código. El asset del actualizador sí está firmado criptográficamente por Tauri para impedir reemplazos no autorizados en futuras actualizaciones.
+### Dos firmas distintas, y sólo una existe
+
+Son dos cosas diferentes y conviene no confundirlas:
+
+| | Estado | Para qué sirve |
+| --- | --- | --- |
+| **Firma del updater** (minisign/Tauri) | **Activa** | Impide que una actualización sea reemplazada por un paquete ajeno. Cada Release incluye la firma del instalador y la aplicación la verifica con la clave pública que lleva incrustada. |
+| **Code signing de Windows** (certificado comercial) | **No existe** | Identificaría al editor ante Windows. No se contrató ningún certificado. |
+
+Como consecuencia, **Windows va a mostrar una advertencia de SmartScreen** la
+primera vez que ejecutes el instalador («Windows protegió su PC»). Para
+continuar: *Más información* → *Ejecutar de todas formas*. Verificar el SHA-256
+publicado es la forma de comprobar que el archivo es el original.
+
+## Requisitos
+
+- Windows 10 o Windows 11, 64 bits.
+- **WebView2**: la aplicación lo necesita para dibujar su interfaz. Viene
+  incluido en Windows 11 y en las versiones actualizadas de Windows 10. Si
+  faltara, el instalador lo descarga e instala solo, sin preguntar.
+- No hace falta instalar Node, npm, Rust ni ninguna herramienta de desarrollo:
+  el instalador trae todo lo necesario.
+- La instalación es por usuario y no pide privilegios de administrador.
 
 ## Uso básico
 
@@ -181,7 +203,25 @@ Build NSIS:
 npm run tauri -- build --ci --bundles nsis
 ```
 
-Los assets firmados requieren las variables de entorno privadas de Tauri. La clave privada no pertenece al repositorio.
+Build NSIS **firmado** para el updater (recomendado para publicar):
+
+```powershell
+npm run build:firmado
+```
+
+`scripts/build-firmado.ps1` toma el par de claves vigente de
+`%APPDATA%\Desktop Organizer\updater`, comprueba que su clave pública sea la
+misma que lleva incrustada `tauri.conf.json` y recién entonces compila. Si no
+coinciden, aborta antes de generar nada: firmar con un par distinto dejaría a
+las instalaciones existentes sin poder actualizarse.
+
+El par vigente desde `v0.4.0` es `tauri-updater.key` (ID `AD66AFEE118F4C`). El
+par anterior, `tauri-updater-v0.2.0.key` (ID `CE2E9BE59BB0436B`), quedó retirado
+y ya no debe usarse: las versiones hasta `v0.3.0` inclusive están firmadas con
+él y no pueden actualizarse automáticamente a `v0.4.0`, esa transición requiere
+instalación manual.
+
+La clave privada no pertenece al repositorio y `.gitignore` bloquea `*.key`.
 
 ## Estado
 
@@ -195,3 +235,6 @@ prioridad visual compatible con aplicaciones fullscreen.
 `v0.3.0`: Paneles avanzados completos.
 
 `v0.4.0`: Parte 9 completa: configuración global, recuperación, updater, diagnóstico y optimización.
+
+`v1.0.0`: primera versión estable. QA final, corrección del icono duplicado en
+el área de notificación y cierre del plan de diez partes.

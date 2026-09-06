@@ -20,6 +20,128 @@ subcajones, reordenamiento, restauración, caché limitada, migración del Dock 
 Parte 5, migraciones encadenadas de todos los schemas, recuperación parcial de
 módulos corruptos, logs rotativos, 300 accesos y límites de ancho.
 
+## Parte 10 — QA final y cierre v1.0.0
+
+Equipo de prueba: **Windows 10 Pro 22H2, build 19045, 64 bits. Un solo monitor
+de 1024x768 a escala 100%. 8 núcleos.**
+
+### Verificación técnica
+
+| Comprobación | Resultado |
+| --- | --- |
+| TypeScript (`npm run check`) | Pasa |
+| Build de frontend | Pasa |
+| `cargo check --all-targets` | Pasa |
+| `cargo test` | **51 pruebas, 0 fallos** |
+| `cargo clippy -- -D warnings` | Pasa, sin advertencias |
+| `npm audit` | 0 vulnerabilidades |
+| Dependencias sin uso | Ninguna; se quitó la feature `tray-icon` que quedó libre |
+| `unwrap()`/`expect()` en producción | **0** — las 148 apariciones están dentro de `#[cfg(test)]` |
+| `console.log` de desarrollo | 0; sólo cuatro `console.error` de manejo de errores |
+| TODO/FIXME/HACK pendientes | Ninguno |
+
+### Seguridad
+
+| Comprobación | Resultado |
+| --- | --- |
+| Claves privadas, tokens o contraseñas en archivos versionados | **Ninguna** |
+| Lo mismo en todo el historial de git | **Ninguna**; nunca se commiteó un `.key`, `.pem` ni `.env` |
+| Rutas personales o nombres propios en el código | Ninguna |
+| Llamadas de red en el frontend | **Ninguna** |
+| Llamadas de red en Rust | **Ninguna** fuera del plugin oficial del updater |
+| Telemetría o analytics | No existe |
+| CSP | `default-src 'self'` con `connect-src` limitado a IPC: la interfaz no puede salir a Internet |
+| Permisos de Tauri | `core:default` para todas las ventanas; el updater sólo para el Administrador |
+| Path traversal | `safe_backup_path` rechaza separadores; la importación valida `is_within` contra la raíz de Cajones |
+
+### Movimiento de archivos, con archivos reales
+
+| Escenario | Resultado |
+| --- | --- |
+| Mismo volumen | `fs::rename` directo, sin copiar |
+| **Entre volúmenes distintos (C: ↔ D:)** | Copia, verifica y **recién entonces** borra el origen. Verificado con una carpeta anidada de 512 KiB |
+| Fallo a mitad de la copia | El origen queda intacto y el error lo dice explícitamente |
+| Conflicto de nombre, mismo volumen | No sobrescribe ni fusiona; origen y destino quedan como estaban |
+| Conflicto de nombre, entre volúmenes | Igual: ambos lados intactos |
+| Restos de staging tras una copia | Ninguno |
+| Nombres `Diseño`, `Música 2026`, `Ñandú`, `Proyecto 日本語`, espacios múltiples | Ciclo completo Escritorio → Cajón → Escritorio sin pérdida ni duplicación |
+
+### Icono del área de notificación — el bug que bloqueaba la Release
+
+Medición hecha leyendo la barra del Explorador e identificando **qué proceso
+puso cada icono**, que es la única forma de distinguir un icono vivo de un
+fantasma.
+
+| Momento | Iconos de Desktop Organizer | Fantasmas |
+| --- | --- | --- |
+| Tras instalar la v1.0.0, 20 ejecuciones seguidas y **13 muertes bruscas del proceso** | **1** | **0** |
+| Tras reiniciar el Explorador de Windows | **1** | **0** |
+
+El proceso sobrevivió al reinicio del Explorador con el mismo PID y volvió a
+registrar su icono solo. Trece cierres a la fuerza —el escenario exacto que
+generaba los fantasmas— no dejaron ninguno.
+
+### Rendimiento medido
+
+| Medición | Valor real |
+| --- | --- |
+| Arranque hasta ventana operativa | 565 ms en frío; 101 y 106 ms después. **Promedio 257 ms** |
+| CPU en reposo, aplicación quieta | **0,013 %** sobre 8 núcleos (31 ms de CPU en 30 s) |
+| CPU de WebView2 en reposo | 0 % |
+| **RAM privada real** | **169,4 MB** en 11 procesos |
+| RAM en `WorkingSet` | 635,6 MB — cifra inflada, cuenta la memoria compartida una vez por proceso |
+| Fuga de memoria, 8 ciclos de matar y reabrir | 24,6 → 24,5 MB. **Delta −0,1 MB: no hay fuga** |
+
+La huella de memoria está dominada por WebView2: hay una ventana web por cada
+Administrador, Cajón, Panel, Dock y tirador. Es el costo de la arquitectura
+elegida, no una fuga.
+
+### Instalación y datos
+
+| Comprobación | Resultado |
+| --- | --- |
+| Single instance: 20 ejecuciones seguidas | **1 proceso** |
+| Actualizar 0.4.0 → 1.0.0 | Correcta |
+| Desinstalar: ¿borra `Documentos\Desktop Organizer`? | **No.** SHA-256 del save idéntico antes y después |
+| Desinstalar + reinstalar | Cajones, Dock y los 9 backups intactos; save idéntico |
+| Accesos directos del instalador | 1 en el Menú Inicio, sin duplicados |
+| Metadata de Windows | ProductName, versión, editor y copyright completos, sin placeholders |
+| Entradas huérfanas de inicio automático | Ninguna |
+
+### Cómo reproducir exactamente este build
+
+```text
+Versión          : 1.0.0
+Fecha del build  : 2026-09-06 (UTC)
+Sistema          : Windows 10 Pro 22H2, build 19045, x64
+rustc            : 1.96.0 (ac68faa20 2026-05-25)
+cargo            : 1.96.0 (30a34c682 2026-05-25)
+node             : v24.17.0
+npm              : 11.13.0
+tauri-cli        : 2.11.4
+Comando          : npm run tauri -- build --ci --bundles nsis
+                   (precedido de cargo clean --release, con la clave de firma
+                   del updater en TAURI_SIGNING_PRIVATE_KEY)
+Instalador       : Desktop-Organizer-v1.0.0-Setup.exe
+Tamaño           : 3.758.299 bytes
+SHA-256          : 125f916ab79fc244cdec2d7d3effdcb0af7494ab23f4d843a20b4759e6b23782
+```
+
+El commit exacto es el que lleva el tag `app-v1.0.0`.
+
+### Pendiente de validación por falta de hardware
+
+El equipo tiene un solo monitor a 100% con Windows 10. **No se probaron
+físicamente**: multimonitor, monitor que se desconecta, monitores con DPI
+distinto, escalado a 125%/150% y Windows 11. Están detallados en
+`KNOWN_ISSUES.md`.
+
+Tampoco se automatizaron las acciones que exigen arrastrar con el mouse dentro
+de una ventana web —soltar un archivo del Escritorio en un Cajón, en el Dock o
+en un Panel—. La lógica que ejecutan esos gestos sí está cubierta por las
+pruebas de `item_repository`, `dock_repository` y `storage_service` con archivos
+reales en disco.
+
 ## Parte 9 — configuración y recuperación integral
 
 Resultados ejecutados el 2026-09-06 sobre el repositorio limpio recibido en `main` más los cambios locales de Parte 9:

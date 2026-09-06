@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.0.0 — 2026-09-06
+
+Primera versión estable. Cierra el plan de diez partes: Cajones, Dock y Paneles
+funcionando en conjunto sobre una base de persistencia, recuperación y
+actualización ya probada.
+
+### Corregido
+
+- **El icono del área de notificación ya no puede duplicarse.** Se registraba
+  con el par ventana+número que Windows asigna en cada arranque, así que los
+  restos de una ejecución anterior quedaban dibujados al lado del icono nuevo.
+  Ahora el icono tiene un identificador propio y permanente (`NIF_GUID`) y, al
+  iniciar, se borra cualquier resto previo antes de registrarse. El menú pasó a
+  la API nativa de Windows conservando sus doce acciones intactas.
+- El icono se vuelve a registrar solo si se reinicia el Explorador de Windows, y
+  se retira al cerrar sesión o apagar el equipo.
+
+### Cambiado
+
+- Versión estable alineada como `1.0.0` en aplicación, paquete, instalador y
+  metadata de Windows.
+- Metadata del instalador completa: editor, copyright, categoría y descripciones.
+- `npm run build:firmado` deja el instalador firmado verificando primero que el
+  par de claves coincida con el que lleva incrustada la aplicación.
+
+### Quitado
+
+- La dependencia de la funcionalidad de bandeja de Tauri (`tray-icon`), que
+  quedó sin uso al pasar el icono a la API nativa.
+
+### Pruebas
+
+- 51 pruebas Rust, TypeScript, build de frontend y Clippy estricto sin
+  advertencias.
+- Movimiento entre volúmenes distintos verificado con archivos reales: copia,
+  verificación y recién entonces borrado del origen.
+- Nombres con acentos, eñes, kanji y espacios múltiples verificados en un ciclo
+  real de mover al Cajón y restaurar al Escritorio.
+
 ## 0.4.0 — 2026-09-06
 
 ### Agregado

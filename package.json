@@ -1,13 +1,14 @@
 {
   "name": "desktop-organizer",
   "private": true,
-  "version": "0.4.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "check": "tsc -b --pretty false",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:firmado": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-firmado.ps1"
   },
   "dependencies": {
     "@tauri-apps/api": "2.11.1",

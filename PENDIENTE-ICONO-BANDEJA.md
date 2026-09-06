@@ -1,9 +1,30 @@
-# PENDIENTE — El icono de la bandeja se duplica
+# RESUELTO — El icono de la bandeja se duplicaba
 
-**Estado: diagnosticado y NO aplicado.** Este documento deja registrado el
-problema, su causa real y la solución acordada, para retomarlo más adelante.
+**Estado: corregido y publicado en la v1.0.0.** Este documento conserva el
+diagnóstico original porque explica *por qué* el icono se registra como se
+registra; el código quedó implementado en `src-tauri/src/tray_service.rs`.
 
-Fecha del diagnóstico: 5 de septiembre de 2026.
+- Fecha del diagnóstico: 5 de septiembre de 2026.
+- Fecha de la corrección: 6 de septiembre de 2026 (Parte 10).
+
+## Qué se implementó, respecto del plan de abajo
+
+Se aplicó la solución acordada de la sección 4, con una diferencia que bajó el
+riesgo: no hizo falta reconstruir la lógica del menú. Las doce acciones son
+exactamente las mismas funciones de antes; sólo cambió quién dibuja el menú
+(`TrackPopupMenu` en lugar de la librería de Tauri).
+
+Además del plan original se agregó:
+
+- volver a registrar el icono si se reinicia el Explorador de Windows
+  (mensaje de difusión `TaskbarCreated`), que antes tampoco estaba cubierto;
+- un camino de respaldo: si Windows rechaza el GUID —pasa cuando ese GUID quedó
+  asociado a un ejecutable en otra ruta, típico al alternar entre la compilación
+  de desarrollo y la instalada— el icono se registra igual del modo clásico en
+  lugar de desaparecer.
+
+Como el icono ya no lo crea Tauri, se quitó también la feature `tray-icon` de la
+dependencia, que quedó sin uso.
 
 ---
 
