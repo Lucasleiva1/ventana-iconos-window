@@ -1,34 +1,46 @@
 # Changelog
 
-## Unreleased — Paneles organizadores (Parte 7)
+## 0.3.0
 
-Versión de trabajo `0.3.0`. Todavía no se publica ninguna Release: el módulo
-Paneles se publica al cerrar la Parte 8.
+Tercer módulo completo: **Paneles organizadores adaptativos**. Cajones, Dock y
+Paneles funcionan simultáneamente.
 
 ### Agregado
 
-- Paneles organizadores adaptativos: ventanas propias del escritorio, movibles
-  y redimensionables libremente por bordes y esquinas.
-- Escalado automático del tamaño de icono según el tamaño del Panel, con piso
-  de 24 px y scroll cuando el contenido ya no entra.
-- Grilla responsive con columnas automáticas y texto que se adapta al espacio:
-  nombre completo, nombre corto o sólo icono con tooltip.
-- Arrastrar programas, accesos directos, carpetas y archivos desde Windows a un
-  Panel. Todo queda como referencia: el original nunca se mueve.
-- Reordenamiento por arrastre con orden persistente y punto de inserción visible.
-- Menú por elemento: Abrir, Abrir ubicación, Renombrar en el panel, Buscar nueva
-  ubicación cuando está roto y Quitar del panel.
-- Bloqueo del Panel: sin mover ni redimensionar, pero los elementos siguen
-  funcionando.
-- Color, opacidad, ocultar y eliminar por Panel. Eliminar borra sólo el panel.
-- Cajones colocables dentro de un Panel; doble clic los muestra y los trae al frente.
-- Sección PANELES en el Administrador y en el System Tray existente.
+- Paneles organizadores: ventanas propias del escritorio, movibles y
+  redimensionables libremente por bordes y esquinas.
+- Escalado automático del tamaño de icono entre 24 y 72 px según el espacio
+  real del Panel, con scroll cuando el contenido ya no entra.
+- Modo manual de tamaño de icono: el tamaño elegido no se reduce nunca.
+- Densidad por Panel: compacta, normal y amplia.
+- Grilla responsive con columnas automáticas y texto adaptativo: nombre
+  completo, nombre corto o sólo icono con tooltip.
+- Arrastrar programas, accesos directos, carpetas y archivos desde Windows.
+  Todo queda como referencia: el original nunca se mueve.
+- Reordenamiento por arrastre con orden persistente y selección múltiple con
+  Ctrl y Shift.
+- Imantado a los bordes del monitor y a otros Paneles, con Alt para mover libre.
+- Bloqueo de posición y bloqueo de contenido, independientes entre sí.
+- Duplicar Panel, expandir al escritorio y restaurar el tamaño anterior.
+- Estilos de fondo, cabecera compacta, título ocultable, color y opacidad.
+- Cajones colocables dentro de un Panel; doble clic los trae al frente.
+- Alinear y distribuir Paneles desde el Administrador.
+- Sección PANELES en el Administrador y en el System Tray.
+- Virtualización de la grilla a partir de 240 accesos.
 
 ### Cambiado
 
-- `schemaVersion` pasa de 6 a 7. Los saves de `v0.2.1` se migran solos y
+- `schemaVersion` pasa de 6 a 8. Los saves de `v0.2.x` se migran solos y
   conservan cajones, Dock, preferencias y archivos.
+- Exportar e importar configuración ahora incluye los Paneles. Importar nunca
+  mueve ni copia archivos.
 - La caché de iconos conserva también los iconos usados por los Paneles.
+
+### Seguridad
+
+- Los Paneles no administran almacenamiento físico: agregar, quitar, duplicar,
+  importar o eliminar un Panel jamás mueve, copia ni borra un archivo real.
+
 
 ## 0.2.1 — 2026-09-05
 

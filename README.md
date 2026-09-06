@@ -13,6 +13,47 @@ Desktop Organizer es una aplicación nativa para Windows que organiza el Escrito
 - Importación y exportación de configuración.
 - Dock retráctil configurable con accesos, separadores, shortcut global, reparación de rutas y orden persistente.
 
+## Los tres sistemas
+
+Desktop Organizer tiene tres formas de ordenar, y hacen cosas distintas a propósito.
+
+| | **Cajón** | **Dock** | **Panel** |
+| --- | --- | --- | --- |
+| Para qué sirve | Guardar cosas fuera del Escritorio | Lanzar rápido lo de todos los días | Tener accesos siempre a la vista |
+| Qué hace con los archivos | **Los mueve de verdad** a una carpeta real | Guarda accesos en su propia carpeta | **Sólo guarda una referencia** |
+| Cómo se ve | Ventana que se puede contraer u ocultar | Barra que aparece con el tirador | Ventana fija sobre el escritorio |
+| Cómo se abre algo | Doble clic | Un clic | Doble clic |
+
+## El Panel
+
+Un Panel es un organizador visual: una ventana propia que queda sobre el escritorio con los accesos que le pongas.
+
+**Nunca mueve tus archivos.** Si arrastrás `Escritorio\popes` a un Panel, `popes` sigue estando en el Escritorio. El Panel guarda sólo la ruta. Si querés sacar algo del Escritorio de verdad, eso lo hacen los Cajones.
+
+### Los iconos se adaptan solos
+
+Es lo que distingue al Panel. Al agrandarlo los iconos crecen; al achicarlo se reducen; y cuando llegan al mínimo de 24 px dejan de achicarse y aparece scroll. Nunca vas a terminar con iconos microscópicos. El máximo es 72 px.
+
+También podés fijar el tamaño a mano: en modo manual el tamaño elegido se respeta siempre y, si no entra, se agregan filas y scroll.
+
+### Qué se le puede poner
+
+Programas, accesos directos, carpetas, archivos de cualquier tipo y hasta tus propios Cajones. Se arrastran desde el Explorador de Windows. Doble clic abre cada cosa con su aplicación de siempre; un Cajón se trae al frente.
+
+### Qué se puede configurar
+
+Densidad (compacta, normal o amplia), color, opacidad, estilo de fondo, cabecera normal o compacta, y si se ve el título. Se puede duplicar un Panel, expandirlo al escritorio y volver al tamaño anterior.
+
+**Dos bloqueos distintos.** *Bloquear posición* impide moverlo y redimensionarlo. *Bloquear contenido* impide reordenar o quitar accesos, pero los sigue abriendo. Se pueden usar por separado.
+
+**Imantado.** Al acercar un Panel a un borde de la pantalla o a otro Panel, se alinea solo. Mantené **Alt** mientras lo movés para colocarlo libremente.
+
+### Seguridad
+
+Quitar un acceso, duplicar un Panel, importar una configuración o eliminar un Panel entero **nunca** borra, mueve ni copia un archivo real. Lo único que se pierde al eliminar un Panel es su disposición.
+
+A diferencia de los Cajones, un Panel no tiene una carpeta física que permita reconstruirlo: su disposición vive en el guardado maestro y sus copias de seguridad. Los archivos referenciados no se pierden nunca.
+
 ## Cómo protege los archivos
 
 La arquitectura central es:

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { panelApi } from "../../services/panelApi";
 import type { PanelItem } from "../../types/panel";
 import type { LabelMode } from "./usePanelLayout";
@@ -17,6 +17,7 @@ interface PanelItemViewProps {
   labelMode: LabelMode;
   dragging: boolean;
   dropTarget: boolean;
+  selected: boolean;
   onOpen: (item: PanelItem) => void;
   onContextMenu: (item: PanelItem, x: number, y: number) => void;
 }
@@ -28,13 +29,14 @@ function shortName(name: string) {
   return firstWord.length >= 3 ? firstWord : trimmed;
 }
 
-export function PanelItemView({
+function PanelItemViewBase({
   panelId,
   item,
   iconSize,
   labelMode,
   dragging,
   dropTarget,
+  selected,
   onOpen,
   onContextMenu,
 }: PanelItemViewProps) {
@@ -63,6 +65,7 @@ export function PanelItemView({
         isDrawer ? "is-drawer" : "",
         dragging ? "is-dragging" : "",
         dropTarget ? "is-drop-target" : "",
+        selected ? "is-selected" : "",
       ].filter(Boolean).join(" ")}
       data-panel-item={item.id}
       role="button"
@@ -70,6 +73,7 @@ export function PanelItemView({
       draggable={false}
       title={tooltip}
       aria-label={`${item.displayName}${isDrawer ? ", cajón" : ""}${item.available ? "" : ", no disponible"}`}
+      aria-selected={selected}
       onDragStart={(event) => event.preventDefault()}
       onDoubleClick={() => onOpen(item)}
       onKeyDown={(event) => {
@@ -109,3 +113,9 @@ export function PanelItemView({
     </div>
   );
 }
+
+/**
+ * Memoizado a propósito: al redimensionar el Panel sólo cambian `iconSize` y
+ * `labelMode`, así que los elementos que no cambian no se vuelven a dibujar.
+ */
+export const PanelItemView = memo(PanelItemViewBase);

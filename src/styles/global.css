@@ -2250,3 +2250,145 @@ body:has(.panel-fallback) #root {
     align-items: flex-start;
   }
 }
+
+/* --- Paneles: Parte 8 ------------------------------------------------------ */
+
+/* Estilos de fondo. El color y la opacidad los calcula el componente; acá sólo
+   se ajustan borde, sombra y desenfoque, que no dependen del color elegido. */
+.panel-window.bg-translucent {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.panel-window.bg-glass {
+  border-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+/* Fondo mínimo: se ven prácticamente sólo la cabecera y los iconos, pero el
+   Panel sigue teniendo un borde tenue para poder encontrarlo y agarrarlo. */
+.panel-window.bg-minimal {
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+.panel-window.bg-minimal .panel-header {
+  border-bottom-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Cabecera compacta: menos alto, mismo agarre para mover. */
+.panel-window.header-compact .panel-header {
+  height: 22px;
+  padding: 0 6px 0 8px;
+  gap: 6px;
+}
+
+.panel-window.header-compact .panel-title {
+  font-size: 11px;
+}
+
+.panel-window.header-compact .panel-drop-overlay {
+  inset: 22px 0 0 0;
+}
+
+.panel-grip {
+  flex: 1 1 auto;
+  color: #6f7c99;
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+
+.panel-lock-mark {
+  flex: 0 0 auto;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.panel-item.is-selected {
+  border-color: rgba(150, 175, 255, 0.9);
+  background: rgba(96, 128, 220, 0.28);
+}
+
+.panel-item.is-selected.is-dragging {
+  opacity: 0.5;
+}
+
+/* Menú de opciones del Panel */
+.panel-options {
+  max-height: calc(100% - 44px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.panel-options-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.panel-options-actions button,
+.panel-options-close {
+  flex: 1 1 auto;
+  padding: 6px 8px;
+  border: 1px solid #39415a;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e6ebf7;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.panel-options-actions button:hover,
+.panel-options-close:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.panel-options-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.panel-options-actions button.is-danger {
+  border-color: rgba(196, 92, 88, 0.55);
+  color: #f0b7b4;
+}
+
+.panel-option-row select {
+  padding: 4px 7px;
+  border: 1px solid #39415a;
+  border-radius: 7px;
+  background: #0e121a;
+  color: #e6ebf7;
+  font-size: 11px;
+}
+
+.panel-option-row.is-switch input {
+  width: 16px;
+  height: 16px;
+  accent-color: #a8baff;
+}
+
+.panel-options-close {
+  flex: none;
+}
+
+/* Barra de alineación del Administrador */
+.panel-align-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #2b3140;
+  border-radius: 12px;
+  background: rgba(20, 24, 32, 0.7);
+}
+
+.panel-align-bar > span {
+  margin-right: 4px;
+  color: #8e97aa;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

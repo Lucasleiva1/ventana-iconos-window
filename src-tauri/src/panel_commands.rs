@@ -18,8 +18,8 @@ use crate::{
     icon_service::IconService,
     item_repository::{self, AddItemFailure},
     model::{
-        DrawerItemType, PANEL_MIN_OPACITY, Panel, PanelGeometryInput, PanelItem, PanelPatch,
-        PersistedState,
+        DrawerItemType, PANEL_MAX_ICON, PANEL_MIN_ICON, PANEL_MIN_OPACITY, Panel, PanelAlignment,
+        PanelGeometry, PanelGeometryInput, PanelItem, PanelPatch, PersistedState,
     },
     monitor_service::{self},
     panel_service,
@@ -116,6 +116,16 @@ fn next_order(panel: &Panel) -> u32 {
         .map_or(0, |value| value.saturating_add(1))
 }
 
+/// Bloquear contenido impide reordenar, renombrar y quitar accesos, pero nunca
+/// impide abrirlos. Es independiente del bloqueo de posición.
+fn ensure_content_unlocked(panel: &Panel) -> Result<(), String> {
+    if panel.lock_content {
+        Err("El contenido del panel está bloqueado".to_owned())
+    } else {
+        Ok(())
+    }
+}
+
 fn resequence(panel: &mut Panel) {
     for (index, item) in panel.items.iter_mut().enumerate() {
         item.order = u32::try_from(index).unwrap_or(u32::MAX);
@@ -176,6 +186,33 @@ pub fn update_panel(
             return Err("La opacidad no es un número válido".to_owned());
         }
         panel.opacity = opacity.clamp(PANEL_MIN_OPACITY, 1.0);
+    }
+    if let Some(density) = patch.density {
+        panel.density = density;
+    }
+    if let Some(icon_mode) = patch.icon_mode {
+        panel.icon_mode = icon_mode;
+    }
+    if let Some(size) = patch.manual_icon_size {
+        if !size.is_finite() {
+            return Err("El tamaño de icono no es un número válido".to_owned());
+        }
+        panel.manual_icon_size = size.clamp(PANEL_MIN_ICON, PANEL_MAX_ICON);
+    }
+    if let Some(snap_enabled) = patch.snap_enabled {
+        panel.snap_enabled = snap_enabled;
+    }
+    if let Some(lock_content) = patch.lock_content {
+        panel.lock_content = lock_content;
+    }
+    if let Some(header_mode) = patch.header_mode {
+        panel.header_mode = header_mode;
+    }
+    if let Some(show_title) = patch.show_title {
+        panel.show_title = show_title;
+    }
+    if let Some(background_style) = patch.background_style {
+        panel.background_style = background_style;
     }
     panel.updated_at = now_millis();
 
@@ -321,14 +358,21 @@ pub(crate) fn mark_panel_hidden(app: &AppHandle, id: &str) {
 
 // --- Geometría --------------------------------------------------------------
 
+/// `suspend_snap` llega en true cuando el usuario mantenía Alt al empezar a
+/// mover: ese gesto se mueve libre aunque el imantado esté activado.
 #[tauri::command]
-pub fn begin_panel_drag(window: WebviewWindow, state: State<'_, AppState>) -> Result<(), String> {
+pub fn begin_panel_drag(
+    suspend_snap: bool,
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let id = panel_service::panel_id_from_label(window.label())
         .ok_or_else(|| "Esta ventana no es un panel".to_owned())?;
     let panel = panel_from_snapshot(&state.snapshot()?, id)?;
     if panel.locked {
         return Ok(());
     }
+    panel_service::set_snap_suspended(suspend_snap);
     window
         .start_dragging()
         .map_err(|error| format!("No se pudo mover el panel: {error}"))
@@ -374,7 +418,102 @@ pub fn record_panel_geometry(
         panel.updated_at = updated_at;
         Ok(())
     })?;
+
+    // Imantado: al terminar el gesto, alineamos con los bordes del área útil y
+    // con los demás Paneles del mismo monitor. Alt durante el movimiento lo
+    // suspende para ese gesto.
+    let suspended = panel_service::snap_suspended();
+    let panel = panel_from_snapshot(&snapshot, &geometry.id)?;
+    if !suspended
+        && let Ok(monitors) = window.available_monitors()
+        && let Some((x, y)) = panel_service::snapped_position(&panel, &snapshot.panels, &monitors)
+        && (x != panel.x || y != panel.y)
+    {
+        let snapped = state.update(move |app_state| {
+            if let Some(stored) = app_state
+                .panels
+                .iter_mut()
+                .find(|stored| stored.id == geometry.id)
+            {
+                stored.x = x;
+                stored.y = y;
+            }
+            Ok(())
+        })?;
+        let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+        return commit(&app, &snapped);
+    }
+
     commit(&app, &snapshot)
+}
+
+/// Expande el Panel al área útil del monitor, o lo devuelve al tamaño anterior.
+/// No usa el maximizado de Windows: es un resize controlado.
+#[tauri::command]
+pub fn set_panel_expanded(
+    id: String,
+    expanded: bool,
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Panel, String> {
+    validate_caller(&window, &id)?;
+    let monitors = window
+        .available_monitors()
+        .map_err(|error| format!("No se pudieron detectar los monitores: {error}"))?;
+    let panel = panel_from_snapshot(&state.snapshot()?, &id)?;
+    if panel.locked {
+        return Err("El panel está bloqueado: desbloqueá la posición primero".to_owned());
+    }
+
+    let target = if expanded {
+        panel_service::expanded_geometry(&panel, &monitors)
+            .ok_or_else(|| "No se pudo calcular el área útil del monitor".to_owned())?
+    } else {
+        panel.previous_geometry.ok_or_else(|| {
+            "No hay un tamaño anterior guardado para restaurar".to_owned()
+        })?
+    };
+    let previous = if expanded {
+        Some(PanelGeometry {
+            x: panel.x,
+            y: panel.y,
+            width: panel.width,
+            height: panel.height,
+        })
+    } else {
+        None
+    };
+
+    let now = now_millis();
+    let snapshot = state.update(move |app_state| {
+        let stored = app_state
+            .panels
+            .iter_mut()
+            .find(|stored| stored.id == id)
+            .ok_or_else(|| "El panel solicitado ya no existe".to_owned())?;
+        if expanded {
+            stored.previous_geometry = previous;
+        } else {
+            stored.previous_geometry = None;
+        }
+        stored.expanded = expanded;
+        stored.x = target.x;
+        stored.y = target.y;
+        stored.width = target.width;
+        stored.height = target.height;
+        stored.updated_at = now;
+        Ok(())
+    })?;
+    commit(&app, &snapshot)?;
+    let updated = snapshot
+        .panels
+        .iter()
+        .find(|stored| stored.id == panel.id)
+        .cloned()
+        .ok_or_else(|| "El panel solicitado ya no existe".to_owned())?;
+    panel_service::apply_geometry(&app, &updated, target)?;
+    Ok(updated)
 }
 
 /// Recoloca el Panel dentro de su monitor. Se usa cuando cambia el DPI o la
@@ -536,6 +675,7 @@ pub fn remove_panel_item(
 ) -> Result<Panel, String> {
     validate_panel_window(&window, &panel_id)?;
     let mut panel = panel_from_snapshot(&state.snapshot()?, &panel_id)?;
+    ensure_content_unlocked(&panel)?;
     let before = panel.items.len();
     panel.items.retain(|item| item.id != item_id);
     if panel.items.len() == before {
@@ -567,6 +707,7 @@ pub fn rename_panel_item(
         return Err("El nombre visible es demasiado largo".to_owned());
     }
     let mut panel = panel_from_snapshot(&state.snapshot()?, &panel_id)?;
+    ensure_content_unlocked(&panel)?;
     let item = panel
         .items
         .iter_mut()
@@ -589,6 +730,7 @@ pub fn reorder_panel_items(
 ) -> Result<Panel, String> {
     validate_panel_window(&window, &panel_id)?;
     let mut panel = panel_from_snapshot(&state.snapshot()?, &panel_id)?;
+    ensure_content_unlocked(&panel)?;
     let existing: HashSet<&str> = panel.items.iter().map(|item| item.id.as_str()).collect();
     let requested: HashSet<&str> = ordered_item_ids.iter().map(String::as_str).collect();
     if existing != requested {
@@ -790,4 +932,193 @@ pub fn refresh_panel_availability(
     let snapshot = replace_panel(&state, panel)?;
     commit(&app, &snapshot)?;
     panel_from_snapshot(&snapshot, &panel_id)
+}
+
+
+/// Quita varios accesos de una sola vez (selección múltiple).
+/// Como siempre, sólo elimina referencias: ningún archivo real se toca.
+#[tauri::command]
+pub fn remove_panel_items(
+    panel_id: String,
+    item_ids: Vec<String>,
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Panel, String> {
+    validate_panel_window(&window, &panel_id)?;
+    let mut panel = panel_from_snapshot(&state.snapshot()?, &panel_id)?;
+    ensure_content_unlocked(&panel)?;
+    let targets: HashSet<&str> = item_ids.iter().map(String::as_str).collect();
+    let before = panel.items.len();
+    panel.items.retain(|item| !targets.contains(item.id.as_str()));
+    if panel.items.len() == before {
+        return Err("Ninguno de esos accesos está en el panel".to_owned());
+    }
+    resequence(&mut panel);
+    panel.updated_at = now_millis();
+    let snapshot = replace_panel(&state, panel)?;
+    commit(&app, &snapshot)?;
+    panel_from_snapshot(&snapshot, &panel_id)
+}
+
+/// Duplica un Panel con todos sus accesos.
+///
+/// Copia sólo referencias: no duplica carpetas, archivos ni ejecutables. El
+/// Panel nuevo recibe identificadores propios y es completamente independiente.
+#[tauri::command]
+pub async fn duplicate_panel(
+    id: String,
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Panel, String> {
+    let source = panel_from_snapshot(&state.snapshot()?, &id)?;
+    let now = now_millis();
+    let mut copy = source.clone();
+    copy.id = Uuid::new_v4().to_string();
+    copy.name = format!("{} copia", source.name);
+    copy.x = source.x.saturating_add(28);
+    copy.y = source.y.saturating_add(28);
+    copy.expanded = false;
+    copy.previous_geometry = None;
+    copy.created_at = now;
+    copy.updated_at = now;
+    for item in &mut copy.items {
+        item.id = Uuid::new_v4().to_string();
+        item.created_at = now;
+    }
+    if let Ok(monitors) = window.available_monitors() {
+        monitor_service::normalize_panel(&mut copy, &monitors);
+    }
+
+    let snapshot = state.update(|app_state| {
+        app_state.panels.push(copy.clone());
+        Ok(())
+    })?;
+    commit(&app, &snapshot)?;
+    panel_service::show_panel_window(&app, &copy)?;
+    Ok(copy)
+}
+
+/// Revisa referencias y refresca iconos sin vigilantes en segundo plano.
+#[tauri::command]
+pub fn refresh_panel(
+    panel_id: String,
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Panel, String> {
+    validate_caller(&window, &panel_id)?;
+    let mut panel = panel_from_snapshot(&state.snapshot()?, &panel_id)?;
+    for item in &mut panel.items {
+        item.available = item.path.exists();
+        if item.available {
+            item.icon_key = IconService::key_for(&item.path);
+            let _ = IconService::ensure(&app, &item.path, &item.icon_key);
+        }
+    }
+    panel.updated_at = now_millis();
+    let snapshot = replace_panel(&state, panel)?;
+    commit(&app, &snapshot)?;
+    panel_from_snapshot(&snapshot, &panel_id)
+}
+
+/// Alinea o distribuye los Paneles visibles y desbloqueados.
+#[tauri::command]
+pub fn align_panels(
+    alignment: PanelAlignment,
+    window: WebviewWindow,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<PersistedState, String> {
+    if window.label() != "admin" {
+        return Err("Sólo el Administrador puede alinear paneles".to_owned());
+    }
+    let monitors = window
+        .available_monitors()
+        .map_err(|error| format!("No se pudieron detectar los monitores: {error}"))?;
+    let snapshot = state.snapshot()?;
+    let mut targets: Vec<Panel> = snapshot
+        .panels
+        .iter()
+        .filter(|panel| !panel.hidden && !panel.locked)
+        .cloned()
+        .collect();
+    if targets.len() < 2 {
+        return Err("Hacen falta al menos dos paneles visibles y desbloqueados".to_owned());
+    }
+    targets.sort_by_key(|panel| (panel.x, panel.y));
+
+    let placements = compute_alignment(alignment, &targets, &monitors);
+    let now = now_millis();
+    let reposition = monitors.clone();
+    let updated = state.update(move |app_state| {
+        for (id, x, y) in &placements {
+            if let Some(panel) = app_state.panels.iter_mut().find(|panel| &panel.id == id) {
+                panel.x = *x;
+                panel.y = *y;
+                panel.updated_at = now;
+            }
+        }
+        for panel in &mut app_state.panels {
+            monitor_service::normalize_panel(panel, &reposition);
+        }
+        Ok(())
+    })?;
+    commit(&app, &updated)?;
+    for panel in updated.panels.iter().filter(|panel| !panel.hidden) {
+        if let Some(panel_window) =
+            app.get_webview_window(&panel_service::panel_window_label(&panel.id))
+        {
+            let _ = panel_window.set_position(tauri::PhysicalPosition::new(panel.x, panel.y));
+        }
+    }
+    Ok(updated)
+}
+
+fn compute_alignment(
+    alignment: PanelAlignment,
+    panels: &[Panel],
+    monitors: &[tauri::Monitor],
+) -> Vec<(String, i32, i32)> {
+    let scale_of = |panel: &Panel| {
+        monitor_service::monitor_for(&panel.monitor_id, panel.x, panel.y, monitors)
+            .map(tauri::Monitor::scale_factor)
+            .unwrap_or(1.0)
+            .max(0.1)
+    };
+    let mut placements = Vec::new();
+    match alignment {
+        PanelAlignment::Left => {
+            let left = panels.iter().map(|panel| panel.x).min().unwrap_or_default();
+            for panel in panels {
+                placements.push((panel.id.clone(), left, panel.y));
+            }
+        }
+        PanelAlignment::Top => {
+            let top = panels.iter().map(|panel| panel.y).min().unwrap_or_default();
+            for panel in panels {
+                placements.push((panel.id.clone(), panel.x, top));
+            }
+        }
+        PanelAlignment::DistributeHorizontally => {
+            let mut sorted: Vec<&Panel> = panels.iter().collect();
+            sorted.sort_by_key(|panel| panel.x);
+            let mut cursor = sorted.first().map(|panel| panel.x).unwrap_or_default();
+            for panel in sorted {
+                placements.push((panel.id.clone(), cursor, panel.y));
+                cursor += (panel.width * scale_of(panel)).round() as i32 + 12;
+            }
+        }
+        PanelAlignment::DistributeVertically => {
+            let mut sorted: Vec<&Panel> = panels.iter().collect();
+            sorted.sort_by_key(|panel| panel.y);
+            let mut cursor = sorted.first().map(|panel| panel.y).unwrap_or_default();
+            for panel in sorted {
+                placements.push((panel.id.clone(), panel.x, cursor));
+                cursor += (panel.height * scale_of(panel)).round() as i32 + 12;
+            }
+        }
+    }
+    placements
 }

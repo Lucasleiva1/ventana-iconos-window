@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { PersistedState } from "../types/drawer";
-import type { Panel, PanelAddResult, PanelPatch } from "../types/panel";
+import type { Panel, PanelAddResult, PanelAlignment, PanelPatch } from "../types/panel";
 
 const iconCache = new Map<string, Promise<string | null>>();
 
@@ -12,7 +12,8 @@ export const panelApi = {
     invoke<Panel>("set_panel_hidden", { id, hidden }),
   setAllHidden: (hidden: boolean) =>
     invoke<PersistedState>("set_all_panels_hidden", { hidden }),
-  beginDrag: () => invoke<void>("begin_panel_drag"),
+  /** `suspendSnap` viaja en true cuando el usuario mantiene Alt: ese gesto se mueve libre. */
+  beginDrag: (suspendSnap: boolean) => invoke<void>("begin_panel_drag", { suspendSnap }),
   recordGeometry: (id: string, x: number, y: number, width: number, height: number) =>
     invoke<void>("record_panel_geometry", { geometry: { id, x, y, width, height } }),
   relayout: (id: string) => invoke<Panel>("relayout_panel", { id }),
@@ -22,6 +23,13 @@ export const panelApi = {
     invoke<Panel>("add_panel_drawer", { panelId, drawerId }),
   removeItem: (panelId: string, itemId: string) =>
     invoke<Panel>("remove_panel_item", { panelId, itemId }),
+  removeItems: (panelId: string, itemIds: string[]) =>
+    invoke<Panel>("remove_panel_items", { panelId, itemIds }),
+  duplicate: (id: string) => invoke<Panel>("duplicate_panel", { id }),
+  setExpanded: (id: string, expanded: boolean) =>
+    invoke<Panel>("set_panel_expanded", { id, expanded }),
+  refresh: (panelId: string) => invoke<Panel>("refresh_panel", { panelId }),
+  align: (alignment: PanelAlignment) => invoke<PersistedState>("align_panels", { alignment }),
   renameItem: (panelId: string, itemId: string, name: string) =>
     invoke<Panel>("rename_panel_item", { panelId, itemId, name }),
   reorder: (panelId: string, orderedItemIds: string[]) =>

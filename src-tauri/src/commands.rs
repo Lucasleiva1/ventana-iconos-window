@@ -962,6 +962,46 @@ fn merge_imported_state(
             current.drawers.push(incoming);
         }
     }
+
+    merge_imported_panels(current, imported.panels, now)?;
+    Ok(())
+}
+
+/// Los Paneles son referencias puras: importarlos reconstruye posición, tamaño,
+/// apariencia y accesos, y nunca mueve ni copia un solo archivo.
+fn merge_imported_panels(
+    current: &mut PersistedState,
+    imported: Vec<crate::model::Panel>,
+    now: u64,
+) -> Result<(), String> {
+    let mut seen = HashSet::new();
+    for mut incoming in imported {
+        if incoming.id.trim().is_empty() || !seen.insert(incoming.id.clone()) {
+            return Err(
+                "La configuración importada contiene identificadores de panel vacíos o repetidos"
+                    .to_owned(),
+            );
+        }
+        incoming.color = validate_color(&incoming.color)?;
+        if !incoming.opacity.is_finite()
+            || !(crate::model::PANEL_MIN_OPACITY..=1.0).contains(&incoming.opacity)
+        {
+            return Err(format!(
+                "El panel “{}” tiene una opacidad inválida",
+                incoming.name
+            ));
+        }
+        incoming.updated_at = now;
+        if let Some(existing) = current
+            .panels
+            .iter_mut()
+            .find(|panel| panel.id == incoming.id)
+        {
+            *existing = incoming;
+        } else {
+            current.panels.push(incoming);
+        }
+    }
     Ok(())
 }
 
@@ -1126,6 +1166,50 @@ mod tests {
         assert_eq!(validate_color("#29aBcD").as_deref(), Ok("#29ABCD"));
         assert!(validate_color("293548").is_err());
         assert!(validate_color("#12345G").is_err());
+    }
+
+    #[test]
+    fn importar_reconstruye_paneles_sin_tocar_los_cajones() {
+        use crate::model::Panel;
+
+        let cajon = Drawer::new("Actual".to_owned(), 0, 0, "monitor".to_owned(), 1);
+        let mut propio = Panel::new("VIDEO".to_owned(), 10, 10, "monitor".to_owned(), 1);
+        propio.width = 400.0;
+        let mut current = PersistedState {
+            schema_version: SCHEMA_VERSION,
+            drawers: vec![cajon],
+            preferences: Default::default(),
+            dock: Default::default(),
+            panels: vec![propio.clone()],
+        };
+
+        // Uno existente que cambia de tamaño y uno nuevo.
+        let mut actualizado = propio.clone();
+        actualizado.width = 720.0;
+        let nuevo = Panel::new("DISEÑO".to_owned(), 50, 50, "monitor".to_owned(), 2);
+        let imported = PersistedState {
+            schema_version: SCHEMA_VERSION,
+            drawers: Vec::new(),
+            preferences: Default::default(),
+            dock: Default::default(),
+            panels: vec![actualizado, nuevo],
+        };
+
+        merge_imported_state(&mut current, imported, Path::new("C:\\Cajones"), 3)
+            .expect("la importación debería funcionar");
+
+        assert_eq!(current.drawers.len(), 1, "los cajones no se tocan");
+        assert_eq!(current.panels.len(), 2, "se agrega el panel nuevo");
+        let recuperado = current
+            .panels
+            .iter()
+            .find(|panel| panel.id == propio.id)
+            .expect("el panel existente debe conservarse");
+        assert_eq!(recuperado.width, 720.0, "se aplica el tamaño importado");
+        assert!(
+            current.panels.iter().any(|panel| panel.name == "DISEÑO"),
+            "el panel importado nuevo debe aparecer"
+        );
     }
 
     #[test]

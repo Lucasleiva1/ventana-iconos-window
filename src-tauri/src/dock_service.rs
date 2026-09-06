@@ -31,6 +31,10 @@ use tauri::{
 use windows::Win32::{
     Foundation::{HWND, RECT},
     Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow},
+    UI::Shell::{
+        QUNS_BUSY, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN,
+        SHQueryUserNotificationState,
+    },
     UI::WindowsAndMessaging::{
         GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId, IsIconic, IsWindowVisible,
     },
@@ -43,6 +47,7 @@ use crate::{
         DockAnimationMode, DockHandlePosition, DockItemKind, DockState, DockWidthMode,
     },
     monitor_service::monitor_id,
+    state::AppState,
 };
 
 pub const DOCK_WINDOW: &str = "dock";
@@ -88,7 +93,8 @@ pub fn start_fullscreen_guard(app: &AppHandle) {
     thread::spawn(move || {
         loop {
             thread::sleep(Duration::from_millis(250));
-            let fullscreen = foreground_covers_handle_monitor(&watched_app);
+            let fullscreen = shell_reports_fullscreen()
+                || foreground_covers_handle_monitor(&watched_app);
             let previous = FOREGROUND_FULLSCREEN.swap(fullscreen, Ordering::SeqCst);
             if previous == fullscreen {
                 continue;
@@ -105,18 +111,62 @@ pub fn start_fullscreen_guard(app: &AppHandle) {
 }
 
 fn sync_taskbar_priority(app: &AppHandle) -> bool {
-    let fullscreen = foreground_covers_handle_monitor(app);
+    let fullscreen = shell_reports_fullscreen() || foreground_covers_handle_monitor(app);
     FOREGROUND_FULLSCREEN.store(fullscreen, Ordering::SeqCst);
     apply_taskbar_priority(app, fullscreen);
     fullscreen
 }
 
+/// Le pregunta a Windows si hay una aplicación ocupando la pantalla completa.
+///
+/// Es exactamente la misma señal que usa el propio Windows para no mostrar
+/// notificaciones encima de un video a pantalla completa, así que reconoce
+/// también los reproductores sin bordes que no coinciden con el rectángulo
+/// exacto del monitor.
+fn shell_reports_fullscreen() -> bool {
+    let Ok(state) = (unsafe { SHQueryUserNotificationState() }) else {
+        return false;
+    };
+    state == QUNS_BUSY
+        || state == QUNS_RUNNING_D3D_FULL_SCREEN
+        || state == QUNS_PRESENTATION_MODE
+}
+
+/// Aplica al Dock la misma jerarquía que la barra de tareas de Windows.
+///
+/// Con una aplicación a pantalla completa la barra de tareas no se ve, y el
+/// tirador tampoco debe verse. Bajarle la prioridad no alcanza —según el
+/// reproductor puede seguir dibujándose encima—, así que directamente se
+/// esconde y vuelve al salir.
 fn apply_taskbar_priority(app: &AppHandle, fullscreen: bool) {
-    let topmost = !fullscreen;
     for label in [DOCK_WINDOW, DOCK_HANDLE_WINDOW] {
         if let Some(window) = app.get_webview_window(label) {
-            let _ = window.set_always_on_top(topmost);
+            let _ = window.set_always_on_top(!fullscreen);
         }
+    }
+
+    if fullscreen {
+        for label in [DOCK_WINDOW, DOCK_HANDLE_WINDOW] {
+            if let Some(window) = app.get_webview_window(label) {
+                let _ = window.hide();
+            }
+        }
+        return;
+    }
+
+    let Ok(dock) = app.state::<AppState>().snapshot().map(|state| state.dock) else {
+        return;
+    };
+    if !dock.enabled {
+        return;
+    }
+    if let Some(handle) = app.get_webview_window(DOCK_HANDLE_WINDOW) {
+        let _ = handle.show();
+    }
+    if dock.visible
+        && let Some(window) = app.get_webview_window(DOCK_WINDOW)
+    {
+        let _ = window.show();
     }
 }
 

@@ -108,6 +108,9 @@ pub fn run() {
                     item.available = item.path.exists();
                 }
             }
+            // Si un monitor desapareció, sus Paneles caen al principal y el
+            // recorte los deja apilados: acá se separan para no perder ninguno.
+            monitor_service::spread_overlapping_panels(&mut persisted.panels, &monitors);
             let dock_warnings =
                 dock_repository::reconcile_startup(&mut persisted.dock, &storage, startup_now)
                     .map_err(std::io::Error::other)?;
@@ -310,6 +313,11 @@ pub fn run() {
             panel_commands::repair_panel_item,
             panel_commands::get_panel_item_icon,
             panel_commands::refresh_panel_availability,
+            panel_commands::set_panel_expanded,
+            panel_commands::remove_panel_items,
+            panel_commands::duplicate_panel,
+            panel_commands::refresh_panel,
+            panel_commands::align_panels,
         ])
         .on_window_event(|window, event| {
             let is_dock_window = window.label() == dock_service::DOCK_WINDOW

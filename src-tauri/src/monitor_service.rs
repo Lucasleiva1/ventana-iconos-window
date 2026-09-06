@@ -153,9 +153,10 @@ pub fn panel_limits(monitor: &Monitor) -> (f64, f64) {
 /// Deja el Panel dentro de su monitor: corrige tamaño, posición y monitor
 /// guardado. Cubre cambio de monitor, cambio de resolución/DPI y desconexión.
 pub fn normalize_panel(panel: &mut Panel, monitors: &[Monitor]) {
+    let (minimum_width, minimum_height) = panel.minimum_size();
     let Some(monitor) = monitor_for(&panel.monitor_id, panel.x, panel.y, monitors) else {
-        panel.width = panel.width.max(PANEL_MIN_WIDTH);
-        panel.height = panel.height.max(PANEL_MIN_HEIGHT);
+        panel.width = panel.width.max(minimum_width);
+        panel.height = panel.height.max(minimum_height);
         return;
     };
 
@@ -167,8 +168,8 @@ pub fn normalize_panel(panel: &mut Panel, monitors: &[Monitor]) {
     if !panel.height.is_finite() {
         panel.height = PANEL_DEFAULT_HEIGHT;
     }
-    panel.width = panel.width.clamp(PANEL_MIN_WIDTH, maximum_width);
-    panel.height = panel.height.clamp(PANEL_MIN_HEIGHT, maximum_height);
+    panel.width = panel.width.clamp(minimum_width.min(maximum_width), maximum_width);
+    panel.height = panel.height.clamp(minimum_height.min(maximum_height), maximum_height);
 
     let area = monitor.work_area();
     let scale = monitor.scale_factor().max(0.1);
@@ -257,4 +258,24 @@ pub fn normalize_drawer(drawer: &mut Drawer, monitors: &[Monitor]) {
 
     drawer.x = i64::from(drawer.x).clamp(i64::from(minimum_x), maximum_x) as i32;
     drawer.y = i64::from(drawer.y).clamp(i64::from(minimum_y), maximum_y) as i32;
+}
+
+
+/// Reparte los Paneles que quedaron exactamente superpuestos.
+///
+/// Cuando se desconecta un monitor, todos sus Paneles caen al principal y el
+/// recorte los deja apilados en la misma esquina. Esto los separa con un
+/// escalonado simple para que ninguno quede tapado ni perdido.
+pub fn spread_overlapping_panels(panels: &mut [Panel], monitors: &[Monitor]) {
+    let mut used: Vec<(i32, i32)> = Vec::new();
+    for panel in panels.iter_mut() {
+        let mut attempts = 0;
+        while used.contains(&(panel.x, panel.y)) && attempts < 24 {
+            panel.x = panel.x.saturating_add(28);
+            panel.y = panel.y.saturating_add(28);
+            normalize_panel(panel, monitors);
+            attempts += 1;
+        }
+        used.push((panel.x, panel.y));
+    }
 }

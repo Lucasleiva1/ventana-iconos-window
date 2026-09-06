@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub const SCHEMA_VERSION: u32 = 7;
+pub const SCHEMA_VERSION: u32 = 8;
 pub const DEFAULT_DRAWER_WIDTH: f64 = 460.0;
 pub const DEFAULT_DRAWER_HEIGHT: f64 = 300.0;
 pub const COLLAPSED_HEIGHT: f64 = 48.0;
@@ -25,6 +25,13 @@ pub const PANEL_MIN_OPACITY: f64 = 0.35;
 pub const DEFAULT_PANEL_OPACITY: f64 = 0.94;
 /// Margen de seguridad respecto del área útil real del monitor.
 pub const PANEL_SAFETY_MARGIN: f64 = 12.0;
+/// Límites del tamaño de icono dentro de un Panel, en píxeles lógicos.
+/// Por debajo del mínimo los iconos dejan de ser reconocibles; por encima del
+/// máximo crecerían sin aportar nada aunque el Panel sea enorme.
+pub const PANEL_MIN_ICON: f64 = 24.0;
+pub const PANEL_MAX_ICON: f64 = 72.0;
+/// Distancia a la que un Panel se imanta a un borde o a otro Panel.
+pub const PANEL_SNAP_THRESHOLD: f64 = 14.0;
 
 /// Ancho lógico mínimo del Dock: el estado vacío necesita espacio para su mensaje.
 pub const DOCK_MIN_WIDTH: f64 = 360.0;
@@ -368,6 +375,92 @@ pub struct DockPatch {
     pub hide_after_open: Option<bool>,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PanelDensity {
+    Compact,
+    #[default]
+    Normal,
+    Wide,
+}
+
+impl PanelDensity {
+    /// Separación entre celdas en píxeles lógicos.
+    pub const fn gap(self) -> f64 {
+        match self {
+            Self::Compact => 6.0,
+            Self::Normal => 10.0,
+            Self::Wide => 16.0,
+        }
+    }
+
+    /// Aire alrededor de la grilla.
+    pub const fn padding(self) -> f64 {
+        match self {
+            Self::Compact => 6.0,
+            Self::Normal => 10.0,
+            Self::Wide => 16.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PanelIconMode {
+    /// Los iconos se adaptan solos al tamaño del Panel.
+    #[default]
+    Auto,
+    /// El usuario fija el tamaño; si no entra, se agregan filas y scroll.
+    Manual,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PanelHeaderMode {
+    #[default]
+    Normal,
+    Compact,
+}
+
+impl PanelHeaderMode {
+    pub const fn height(self) -> f64 {
+        match self {
+            Self::Normal => PANEL_HEADER_HEIGHT,
+            Self::Compact => 22.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PanelBackgroundStyle {
+    #[default]
+    Solid,
+    Translucent,
+    Glass,
+    /// Casi sin fondo: se ven prácticamente sólo la cabecera y los iconos.
+    Minimal,
+}
+
+/// Geometría guardada antes de expandir el Panel al escritorio.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelGeometry {
+    pub x: i32,
+    pub y: i32,
+    pub width: f64,
+    pub height: f64,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PanelAlignment {
+    Left,
+    Top,
+    DistributeHorizontally,
+    DistributeVertically,
+}
+
 /// Acceso de un Panel organizador.
 ///
 /// Los Paneles son **siempre referencias**: comparten con `DrawerItem` y
@@ -417,12 +510,49 @@ pub struct Panel {
     #[serde(default = "default_true")]
     pub auto_icon_size: bool,
     #[serde(default)]
+    pub density: PanelDensity,
+    #[serde(default)]
+    pub icon_mode: PanelIconMode,
+    #[serde(default = "default_manual_icon_size")]
+    pub manual_icon_size: f64,
+    #[serde(default = "default_true")]
+    pub snap_enabled: bool,
+    /// Bloquea reordenar y quitar accesos. Es independiente de `locked`, que
+    /// bloquea posición y tamaño.
+    #[serde(default)]
+    pub lock_content: bool,
+    #[serde(default)]
+    pub header_mode: PanelHeaderMode,
+    #[serde(default = "default_true")]
+    pub show_title: bool,
+    #[serde(default)]
+    pub background_style: PanelBackgroundStyle,
+    #[serde(default)]
+    pub expanded: bool,
+    #[serde(default)]
+    pub previous_geometry: Option<PanelGeometry>,
+    #[serde(default)]
     pub items: Vec<PanelItem>,
     pub created_at: u64,
     pub updated_at: u64,
 }
 
 impl Panel {
+    /// Mínimo funcional real de este Panel: su cabecera, una fila de iconos
+    /// mínimos y el aire que pide su densidad. Un Panel con cabecera compacta
+    /// puede achicarse más que uno con cabecera normal, y siempre queda
+    /// suficiente superficie para volver a agarrarlo y agrandarlo.
+    pub fn minimum_size(&self) -> (f64, f64) {
+        let padding = self.density.padding() * 2.0;
+        let width = (PANEL_MIN_ICON + 26.0 + padding).max(PANEL_MIN_WIDTH);
+        let height = self.header_mode.height()
+            + PANEL_MIN_ICON
+            + 24.0
+            + padding
+            + self.density.gap();
+        (width, height.max(PANEL_MIN_HEIGHT))
+    }
+
     pub fn new(name: String, x: i32, y: i32, monitor_id: String, now: u64) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
@@ -437,6 +567,16 @@ impl Panel {
             color: DEFAULT_COLOR.to_owned(),
             opacity: DEFAULT_PANEL_OPACITY,
             auto_icon_size: true,
+            density: PanelDensity::default(),
+            icon_mode: PanelIconMode::default(),
+            manual_icon_size: DEFAULT_MANUAL_ICON_SIZE,
+            snap_enabled: true,
+            lock_content: false,
+            header_mode: PanelHeaderMode::default(),
+            show_title: true,
+            background_style: PanelBackgroundStyle::default(),
+            expanded: false,
+            previous_geometry: None,
             items: Vec::new(),
             created_at: now,
             updated_at: now,
@@ -451,6 +591,14 @@ pub struct PanelPatch {
     pub locked: Option<bool>,
     pub color: Option<String>,
     pub opacity: Option<f64>,
+    pub density: Option<PanelDensity>,
+    pub icon_mode: Option<PanelIconMode>,
+    pub manual_icon_size: Option<f64>,
+    pub snap_enabled: Option<bool>,
+    pub lock_content: Option<bool>,
+    pub header_mode: Option<PanelHeaderMode>,
+    pub show_title: Option<bool>,
+    pub background_style: Option<PanelBackgroundStyle>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -469,6 +617,12 @@ fn default_panel_color() -> String {
 
 const fn default_panel_opacity() -> f64 {
     DEFAULT_PANEL_OPACITY
+}
+
+pub const DEFAULT_MANUAL_ICON_SIZE: f64 = 48.0;
+
+const fn default_manual_icon_size() -> f64 {
+    DEFAULT_MANUAL_ICON_SIZE
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

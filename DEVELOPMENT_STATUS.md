@@ -26,8 +26,16 @@ MÓDULO DOCK — COMPLETO
 PARTE 7 — COMPLETADA
 Paneles organizadores adaptativos funcionales
 
-PARTE 8 — PENDIENTE
-Paneles avanzados + Release v0.3.0
+PARTE 8 — COMPLETADA
+Paneles avanzados + estabilización + Release v0.3.0
+
+MÓDULO PANELES — COMPLETO
+
+PARTE 9 — PENDIENTE
+Configuración global + rendimiento + recuperación integral
+
+PARTE 10 — PENDIENTE
+Integración final + QA completo + Release v1.0.0
 ```
 
 La versión `0.2.1` incorpora el actualizador integrado, almacenamiento físico
@@ -82,3 +90,26 @@ No se implementaron Paneles, múltiples docks ni orientación vertical/superior;
 
 No se implementaron snapping, layouts guardados, paneles anidados, colocación
 libre por coordenadas ni la Release `v0.3.0`; pertenecen a la Parte 8.
+
+## Qué entró en la Parte 8
+
+- Auditoría de la Parte 7 y corrección de tres errores reales: la medición del
+  área de la grilla incluía el padding, importar configuración descartaba los
+  Paneles, y varios Paneles recuperados de un monitor desconectado quedaban
+  apilados en la misma esquina.
+- Tamaño de icono automático hasta 72 px y manual con control propio: en manual
+  el tamaño no se reduce nunca, se agregan filas y scroll.
+- Densidad por Panel: compacta, normal y amplia.
+- Imantado a los bordes del área útil y a los demás Paneles, activable por
+  Panel y suspendible manteniendo Alt durante el movimiento.
+- Bloqueo separado de posición y de contenido.
+- Duplicar Panel copiando sólo referencias, con identificadores nuevos.
+- Expandir al escritorio y restaurar el tamaño anterior, con resize controlado
+  en lugar del maximizado de Windows.
+- Selección múltiple con Ctrl y Shift, y quitar la selección completa.
+- Estilos de fondo (sólido, transparente, cristal y mínimo), cabecera compacta
+  y título ocultable.
+- Alinear y distribuir Paneles desde el Administrador.
+- Virtualización de la grilla a partir de 240 accesos, conservando intacto el
+  arrastre en los Paneles normales.
+- `schemaVersion` 8 con migración automática desde el esquema 7.

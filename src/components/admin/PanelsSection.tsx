@@ -1,7 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { panelApi } from "../../services/panelApi";
 import type { MonitorInfo } from "../../types/drawer";
-import type { Panel } from "../../types/panel";
+import type { Panel, PanelAlignment } from "../../types/panel";
+
+const ALIGNMENTS: Array<{ value: PanelAlignment; label: string }> = [
+  { value: "left", label: "Alinear izquierda" },
+  { value: "top", label: "Alinear arriba" },
+  { value: "distributeHorizontally", label: "Distribuir en fila" },
+  { value: "distributeVertically", label: "Distribuir en columna" },
+];
 
 interface PanelsSectionProps {
   panels: Panel[];
@@ -75,6 +82,21 @@ export function PanelsSection({ panels, monitors, onError, onMessage }: PanelsSe
         </div>
       </div>
 
+      {sorted.length > 1 && (
+        <div className="panel-align-bar">
+          <span>Ordenar en pantalla</span>
+          {ALIGNMENTS.map((option) => (
+            <button
+              key={option.value}
+              className="button button-ghost"
+              onClick={() => void run(() => panelApi.align(option.value), "Paneles reubicados.")}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <form className="create-form" onSubmit={createPanel}>
         <label className="sr-only" htmlFor="panel-name">Nombre del panel</label>
         <input
@@ -106,7 +128,8 @@ export function PanelsSection({ panels, monitors, onError, onMessage }: PanelsSe
                   <strong>{panel.name}</strong>
                   <span className="panel-card-meta">
                     {panel.hidden ? "Oculto" : "Visible"}
-                    {panel.locked ? " · Bloqueado" : ""}
+                    {panel.locked ? " · Posición bloqueada" : ""}
+                    {panel.lockContent ? " · Contenido bloqueado" : ""}
                     {" · "}
                     {Math.round(panel.width)} × {Math.round(panel.height)}
                     {" · "}
@@ -142,6 +165,15 @@ export function PanelsSection({ panels, monitors, onError, onMessage }: PanelsSe
                   })}
                 >
                   Renombrar
+                </button>
+                <button
+                  className="button button-ghost"
+                  onClick={() => void run(
+                    () => panelApi.duplicate(panel.id),
+                    `Panel “${panel.name}” duplicado. Sólo se copiaron las referencias.`,
+                  )}
+                >
+                  Duplicar
                 </button>
                 <button
                   className="button button-ghost is-danger"

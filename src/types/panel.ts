@@ -19,6 +19,23 @@ export interface PanelItem {
   createdAt: number;
 }
 
+export type PanelDensity = "compact" | "normal" | "wide";
+export type PanelIconMode = "auto" | "manual";
+export type PanelHeaderMode = "normal" | "compact";
+export type PanelBackgroundStyle = "solid" | "translucent" | "glass" | "minimal";
+export type PanelAlignment =
+  | "left"
+  | "top"
+  | "distributeHorizontally"
+  | "distributeVertically";
+
+export interface PanelGeometry {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface Panel {
   id: string;
   name: string;
@@ -32,6 +49,17 @@ export interface Panel {
   color: string;
   opacity: number;
   autoIconSize: boolean;
+  density: PanelDensity;
+  iconMode: PanelIconMode;
+  manualIconSize: number;
+  snapEnabled: boolean;
+  /** Bloquea reordenar y quitar. Independiente de `locked`, que fija posición. */
+  lockContent: boolean;
+  headerMode: PanelHeaderMode;
+  showTitle: boolean;
+  backgroundStyle: PanelBackgroundStyle;
+  expanded: boolean;
+  previousGeometry: PanelGeometry | null;
   items: PanelItem[];
   createdAt: number;
   updatedAt: number;
@@ -42,6 +70,14 @@ export interface PanelPatch {
   locked?: boolean;
   color?: string;
   opacity?: number;
+  density?: PanelDensity;
+  iconMode?: PanelIconMode;
+  manualIconSize?: number;
+  snapEnabled?: boolean;
+  lockContent?: boolean;
+  headerMode?: PanelHeaderMode;
+  showTitle?: boolean;
+  backgroundStyle?: PanelBackgroundStyle;
 }
 
 export interface PanelAddFailure {
