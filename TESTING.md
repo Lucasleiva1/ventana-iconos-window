@@ -109,6 +109,40 @@ Escalas DPI de 125 % y 150 %, varios monitores y desconexión en caliente del
 monitor de un Panel. La lógica recalcula límites y devuelve el Panel al monitor
 principal por diseño.
 
+## Parte 8 — Paneles avanzados y cierre v0.3.0
+
+Verificado con automatización real contra el binario de release, en 1024x768 al
+100 % de escala, sobre Windows 10 Pro 19045:
+
+| Prueba | Resultado |
+| --- | --- |
+| 71 — Imantado a bordes | OK. Soltado a 9 px del borde izquierdo, se alineó en 12 (margen de seguridad). |
+| 72 — Imantado entre Paneles | OK. Soltado a 4 px del borde de otro Panel, alineó ambos bordes izquierdos. |
+| 74 — Auto vs manual | OK. En automático el tamaño de icono sigue al Panel; en manual se respeta y aparece scroll. |
+| 76 — Bloqueo de posición | OK. Windows quita el borde redimensionable y la cabecera deja de mover el Panel. |
+| 77 — Bloqueo de contenido | OK por diseño y cubierto en el backend: reordenar, renombrar y quitar devuelven error; abrir sigue funcionando. |
+| 82 — Persistencia | OK. Tras reiniciar, cada Panel vuelve a su posición, tamaño, modo y densidad. |
+| 83 — Export/import | OK. Cubierto por prueba automatizada: importar reconstruye los Paneles y no toca los Cajones ni ningún archivo. |
+| 87 — Single instance | OK. Ejecutar el binario otra vez deja un solo proceso. |
+| 96 — Actualizar v0.2.1 a v0.3.0 | **OK.** Instalación silenciosa sobre la v0.2.1: registro actualizado a 0.3.0, cajones, Dock, preferencias, carpetas físicas y backups intactos. |
+| 107 — Instalador | OK. Instalado y ejecutado desde `%LOCALAPPDATA%\Desktop Organizer`. |
+| Dock en pantalla completa | **OK.** Con una aplicación a pantalla completa el tirador se oculta como la barra de tareas, y vuelve al salir. Verificado con el reproductor real del usuario. |
+
+### Bugs de la Parte 7 encontrados y corregidos
+
+1. La grilla medía su área con `clientWidth`, que incluye el padding, así que
+   calculaba 20 px más de los reales en cada eje. Ahora usa la caja de contenido
+   que entrega `ResizeObserver`.
+2. Importar configuración descartaba los Paneles por completo.
+3. Varios Paneles recuperados de un monitor desconectado quedaban apilados
+   exactamente en la misma esquina.
+
+### Pendiente de validación por falta de hardware
+
+Escalas DPI de 125 % y 150 %, varios monitores y desconexión en caliente. La
+lógica recalcula límites y devuelve los Paneles al monitor principal por diseño,
+escalonándolos para que ninguno quede tapado.
+
 ## Limitaciones de validación
 
 - No se simula un corte eléctrico real durante una copia. Se prueban fallos controlados manteniendo el origen.
