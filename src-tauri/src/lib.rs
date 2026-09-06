@@ -5,6 +5,8 @@ mod dock_service;
 mod icon_service;
 mod item_repository;
 mod level_commands;
+mod log_service;
+mod maintenance;
 mod model;
 mod monitor_service;
 mod panel_commands;
@@ -71,6 +73,9 @@ pub fn run() {
             let monitors = admin.available_monitors()?;
             let storage = StorageService::paths().map_err(std::io::Error::other)?;
             StorageService::ensure_layout(&storage).map_err(std::io::Error::other)?;
+            if let Err(error) = log_service::LogService::initialize() {
+                eprintln!("No se pudo iniciar el log local: {error}");
+            }
             let physical_drawers =
                 StorageService::discover_drawers(&storage).map_err(std::io::Error::other)?;
             let master_exists =
@@ -241,6 +246,19 @@ pub fn run() {
             commands::get_preferences,
             commands::update_preferences,
             commands::get_recovery_status,
+            maintenance::get_backup_center,
+            maintenance::create_configuration_backup,
+            maintenance::restore_configuration_backup,
+            maintenance::delete_configuration_backup,
+            maintenance::export_configuration_backup,
+            maintenance::prepare_application_update,
+            maintenance::record_update_check,
+            maintenance::open_data_root,
+            maintenance::open_logs_root,
+            maintenance::clear_logs,
+            maintenance::check_application_health,
+            maintenance::get_diagnostic_report,
+            maintenance::reset_visual_configuration,
             commands::add_drawer_items,
             commands::remove_drawer_item,
             commands::restore_drawer_item,
@@ -417,6 +435,9 @@ pub fn run() {
         .run(tauri::generate_context!());
 
     if let Err(error) = application {
+        let _ = log_service::LogService::error(&format!(
+            "La aplicación finalizó con un error: {error}"
+        ));
         eprintln!("Desktop Organizer finalizó con un error: {error}");
     }
 }

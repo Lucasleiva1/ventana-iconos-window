@@ -13,6 +13,7 @@ Documentos\Desktop Organizer\
 ├── Cajones\                 # archivos y carpetas reales
 ├── Dock - Accesos\          # elementos y accesos reales del Dock
 ├── Backups\                 # copias recientes del save
+├── Logs\                    # diagnóstico local rotativo
 └── desktop-organizer-save.json
 ```
 
@@ -38,6 +39,19 @@ Al iniciar, Desktop Organizer valida `desktop-organizer-save.json`. Si no es vá
 
 Si ningún backup sirve, la aplicación no sobrescribe silenciosamente los datos. Ofrece **Recuperar desde disco** cuando encuentra carpetas físicas.
 
+La carga migra en cadena cualquier schema anterior admitido. Antes de confirmar una migración crea un backup del archivo original, migra en memoria, valida una copia temporal y recién entonces reemplaza el master. Si una sección aislada está dañada, conserva los módulos válidos y aplica defaults sólo a la sección que no puede interpretar.
+
+## Centro de backup y recuperación
+
+En **Configuración → Backup y recuperación** se muestra la ruta del save, su validez y la lista de copias con fecha, schema y tamaño.
+
+- **Crear backup ahora** copia únicamente configuración, metadata, posiciones, referencias y orden.
+- **Restaurar** valida primero la copia y crea otro backup del estado actual antes del reemplazo atómico.
+- **Exportar** guarda una copia portable con versión visible en el nombre.
+- **Eliminar** borra solamente la copia seleccionada, nunca el master ni archivos de usuario.
+
+Se conservan hasta ocho backups normales. Los saves corruptos apartados se guardan por separado para diagnóstico.
+
 ## Recuperar desde las carpetas físicas
 
 1. Abrí el Administrador.
@@ -54,7 +68,19 @@ Si una `.drawer.json` está dañada, se archiva con un nombre `.corrupt-*` y se 
 2. Seleccioná un JSON exportado previamente o una copia válida de `Backups`.
 3. La importación se combina con el estado existente y no borra cajones ni archivos actuales.
 
-Los JSON inválidos, esquemas futuros incompatibles y rutas inseguras son rechazados con un mensaje comprensible.
+Los JSON inválidos y esquemas futuros incompatibles son rechazados con un mensaje comprensible. Antes de importar se crea un backup del estado actual. Cajones, Dock y Paneles se reconstruyen desde la configuración importada sin mover archivos personales.
+
+Si la configuración viene de otra PC, una ruta absoluta que allí no exista aparece como **No disponible** y la aplicación continúa. Los Cajones managed necesitan también sus carpetas físicas: el JSON no contiene esos archivos. Copiá aparte `Cajones` y, para conservar el respaldo físico real del Dock actual, `Dock - Accesos`.
+
+## Empezar de nuevo sin borrar archivos
+
+Cuando no existe save, **Empezar vacío** crea una organización nueva sin eliminar `Cajones`. En una instalación normal, **Restablecer configuración visual** crea primero un backup y restablece apariencia y posiciones; conserva el contenido físico, los accesos del Dock y todas las referencias de Paneles.
+
+## Diagnóstico y logs
+
+**Comprobar estado** revisa save, carpetas básicas, backups y configuración del updater. **Copiar diagnóstico** produce un texto de soporte sin tokens, secretos ni contenido de documentos y reemplaza el perfil del usuario por `%USERPROFILE%` cuando corresponde.
+
+Los logs son locales, rotan al llegar a 1 MiB y mantienen como máximo cinco archivos. **Limpiar logs** afecta exclusivamente esos archivos. Desktop Organizer no envía telemetría ni logs a Internet.
 
 ## Después de reinstalar
 

@@ -180,6 +180,27 @@ pub fn update_preferences(
     if let Some(value) = patch.start_silently {
         next.start_silently = value;
     }
+    if let Some(value) = patch.check_updates_automatically {
+        next.check_updates_automatically = value;
+    }
+    if let Some(value) = patch.performance_mode {
+        next.performance_mode = value;
+    }
+    if let Some(value) = patch.animation_mode {
+        next.animation_mode = value;
+    }
+    if let Some(value) = patch.default_panel_density {
+        next.default_panel_density = value;
+    }
+    if let Some(value) = patch.default_panel_icon_mode {
+        next.default_panel_icon_mode = value;
+    }
+    if let Some(value) = patch.default_panel_snap_enabled {
+        next.default_panel_snap_enabled = value;
+    }
+    if let Some(value) = patch.default_panel_locked {
+        next.default_panel_locked = value;
+    }
     let snapshot = state.update(|current| {
         current.preferences = next.clone();
         Ok(())
@@ -762,6 +783,9 @@ pub async fn import_configuration(
         .into_path()
         .map_err(|error| format!("El archivo elegido no es una ruta local: {error}"))?;
     let imported = PersistenceService::load_external(&path)?;
+    if PersistenceService::master_exists()? {
+        let _ = PersistenceService::create_backup_now()?;
+    }
     let storage = StorageService::paths()?;
     let monitors = window
         .available_monitors()
@@ -773,16 +797,7 @@ pub async fn import_configuration(
         item_repository::sync_drawer(drawer, now_millis())?;
         monitor_service::normalize_drawer(drawer, &monitors);
     }
-    let snapshot = state.update(|current| {
-        *current = merged.clone();
-        Ok(())
-    })?;
-    commit(&app, &snapshot)?;
-    for drawer in &snapshot.drawers {
-        if !drawer.hidden {
-            window_service::show_drawer_window(&app, drawer)?;
-        }
-    }
+    let snapshot = crate::maintenance::apply_runtime_state(&app, &window, &state, merged)?;
     Ok(Some(snapshot))
 }
 
@@ -878,6 +893,16 @@ fn merge_imported_state(
 ) -> Result<(), String> {
     current.preferences.hide_admin_on_minimize = imported.preferences.hide_admin_on_minimize;
     current.preferences.start_silently = imported.preferences.start_silently;
+    current.preferences.check_updates_automatically =
+        imported.preferences.check_updates_automatically;
+    current.preferences.performance_mode = imported.preferences.performance_mode;
+    current.preferences.animation_mode = imported.preferences.animation_mode;
+    current.preferences.default_panel_density = imported.preferences.default_panel_density;
+    current.preferences.default_panel_icon_mode = imported.preferences.default_panel_icon_mode;
+    current.preferences.default_panel_snap_enabled =
+        imported.preferences.default_panel_snap_enabled;
+    current.preferences.default_panel_locked = imported.preferences.default_panel_locked;
+    current.dock = imported.dock.clone();
     let mut imported_ids = HashSet::new();
     for mut incoming in imported.drawers {
         if incoming.id.trim().is_empty() || !imported_ids.insert(incoming.id.clone()) {
@@ -1230,6 +1255,7 @@ mod tests {
                 start_with_windows: true,
                 hide_admin_on_minimize: false,
                 start_silently: false,
+                ..Preferences::default()
             },
             dock: Default::default(),
             panels: Vec::new(),

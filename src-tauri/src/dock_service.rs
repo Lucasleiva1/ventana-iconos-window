@@ -55,6 +55,10 @@ pub const DOCK_HANDLE_WINDOW: &str = "dock-handle";
 
 /// Duración de la animación de salida antes de ocultar realmente la ventana.
 const HIDE_ANIMATION_MS: u64 = 200;
+/// El estado fullscreen no expone una señal confiable para todas las clases de
+/// ventana de Windows. Un muestreo de baja frecuencia mantiene la prioridad
+/// tipo barra de tareas sin el polling de 4 Hz usado en versiones anteriores.
+const FULLSCREEN_GUARD_INTERVAL_MS: u64 = 1_000;
 
 /// Generación de visibilidad: cancela una ocultación programada si el usuario
 /// vuelve a abrir el Dock antes de que termine la animación de salida.
@@ -92,9 +96,12 @@ pub fn start_fullscreen_guard(app: &AppHandle) {
     let watched_app = app.clone();
     thread::spawn(move || {
         loop {
-            thread::sleep(Duration::from_millis(250));
-            let fullscreen = shell_reports_fullscreen()
-                || foreground_covers_handle_monitor(&watched_app);
+            thread::sleep(Duration::from_millis(FULLSCREEN_GUARD_INTERVAL_MS));
+            if watched_app.get_webview_window(DOCK_HANDLE_WINDOW).is_none() {
+                continue;
+            }
+            let fullscreen =
+                shell_reports_fullscreen() || foreground_covers_handle_monitor(&watched_app);
             let previous = FOREGROUND_FULLSCREEN.swap(fullscreen, Ordering::SeqCst);
             if previous == fullscreen {
                 continue;
@@ -127,9 +134,7 @@ fn shell_reports_fullscreen() -> bool {
     let Ok(state) = (unsafe { SHQueryUserNotificationState() }) else {
         return false;
     };
-    state == QUNS_BUSY
-        || state == QUNS_RUNNING_D3D_FULL_SCREEN
-        || state == QUNS_PRESENTATION_MODE
+    state == QUNS_BUSY || state == QUNS_RUNNING_D3D_FULL_SCREEN || state == QUNS_PRESENTATION_MODE
 }
 
 /// Aplica al Dock la misma jerarquía que la barra de tareas de Windows.

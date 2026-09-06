@@ -472,6 +472,7 @@ mod tests {
             drawers: app_root.join("Cajones"),
             dock: app_root.join("Dock - Accesos"),
             backups: app_root.join("Backups"),
+            logs: app_root.join("Logs"),
             master_save: app_root.join("desktop-organizer-save.json"),
             root: app_root,
         }

@@ -1,6 +1,6 @@
 # Validación de Desktop Organizer
 
-Estado actual: `v0.2.1` implementada y en preparación de Release.
+Estado actual: Parte 9 preparada como `0.4.0`. La Release `v1.0.0` permanece reservada para la Parte 10.
 
 Este documento registra pruebas reales y límites del entorno usado para cerrar la versión.
 
@@ -10,13 +10,39 @@ Este documento registra pruebas reales y límites del entorno usado para cerrar 
 - Frontend de producción: `npm run build`.
 - Rust: `cargo test --manifest-path src-tauri\Cargo.toml`.
 - Lints Rust: `cargo clippy --manifest-path src-tauri\Cargo.toml --all-targets -- -D warnings`.
-- Build Tauri de producción y bundle NSIS firmado.
+- Build Tauri de producción sin bundle. El bundle NSIS firmado se reserva para
+  un entorno de Release autorizado que posea la clave privada fuera del repositorio.
 
-La suite Rust contiene 40 pruebas. Cubre, entre otros casos: conflictos sin
+La suite Rust contiene 46 pruebas. Cubre, entre otros casos: conflictos sin
 sobrescritura, origen conservado ante copia fallida, guardado atómico, backups,
 save corrupto, metadata corrupta, Unicode, 1001 elementos no recursivos,
 subcajones, reordenamiento, restauración, caché limitada, migración del Dock de
-Parte 5, 300 accesos y límites de ancho.
+Parte 5, migraciones encadenadas de todos los schemas, recuperación parcial de
+módulos corruptos, logs rotativos, 300 accesos y límites de ancho.
+
+## Parte 9 — configuración y recuperación integral
+
+Resultados ejecutados el 2026-09-06 sobre el repositorio limpio recibido en `main` más los cambios locales de Parte 9:
+
+| Prueba | Resultado |
+| --- | --- |
+| TypeScript | OK: `npm run check`. |
+| Frontend de producción | OK: 49 módulos; build Vite en 366 ms y repetición dentro del build nativo en 213 ms. |
+| Rust | OK: 46/46 pruebas, 0 fallos. |
+| Migración encadenada | OK: fixtures de todos los schemas 1–8 llegan directamente al schema 9. |
+| Configuración parcialmente corrupta | OK: un Dock inválido no descarta Cajones ni Paneles válidos. |
+| Backup/save corrupto | OK: master atómico, copia válida recuperable y archivo corrupto preservado. |
+| Logs | OK: rotación limitada y archivo ajeno intacto. |
+| Filesystem Cajones/Dock | OK por regresión automatizada: movimientos verificados, conflictos sin sobrescritura y recuperación no recursiva. |
+| Paneles | OK por regresión automatizada y TypeScript: referencias puras, persistencia y layout existentes sin fallos. |
+| Clippy | OK: todos los targets con `-D warnings`. |
+| Tauri release | OK: binario e instalador NSIS `0.4.0` compilados; firma updater de 432 caracteres y metadatos internos 0.4.0 verificados. |
+| Assets de Release | OK: instalador `Desktop-Organizer-v0.4.0-Setup.exe`, `.sig`, `latest.json`, `latest-v0.4.0.json` y `SHA256SUMS-v0.4.0.txt`, todos versionados o acompañados por su alias técnico requerido. |
+| Single-instance | Verificación parcial real: lanzar el binario de desarrollo con la instalación 0.3.0 abierta activó la instancia existente en vez de crear un segundo proceso funcional. |
+| Revisión visual 0.4.0 | Pendiente de la instalación manual solicitada por el usuario. |
+| CPU/RAM/disco y arranque 0.4.0 | No medidos todavía; no se inventan valores. El único muestreo nativo periódico, necesario para prioridad fullscreen del Dock, bajó de 4 Hz a 1 Hz. |
+
+La clave privada del updater se mantiene fuera del árbol. La instalación manual de `0.4.0` realiza la transición al nuevo par de firma; desde esa versión, la verificación criptográfica de futuras actualizaciones queda a cargo del plugin oficial de Tauri con la clave pública configurada.
 
 ## Parte 5 — Dock
 

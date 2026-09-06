@@ -31,15 +31,28 @@ Paneles avanzados + estabilización + Release v0.3.0
 
 MÓDULO PANELES — COMPLETO
 
-PARTE 9 — PENDIENTE
-Configuración global + rendimiento + recuperación integral
+PARTE 9 — COMPLETADA
+Configuración global + recuperación + updater + diagnóstico + optimización
+
+PARTES 1–9 — COMPLETADAS
+
+CAJONES — COMPLETO
+DOCK — COMPLETO
+PANELES — COMPLETO
+
+CONFIGURACIÓN GLOBAL — COMPLETA
+RECUPERACIÓN — COMPLETA
+UPDATER — IMPLEMENTADO
+DIAGNÓSTICO — IMPLEMENTADO
+OPTIMIZACIÓN GLOBAL — COMPLETADA
 
 PARTE 10 — PENDIENTE
-Integración final + QA completo + Release v1.0.0
+QA FINAL + Release v1.0.0
 ```
 
-La versión `0.2.1` incorpora el actualizador integrado, almacenamiento físico
-del Dock y prioridad visual compatible con fullscreen.
+La versión `0.4.0` incorpora configuración global, recuperación integral,
+diagnóstico y optimización. La Release `v1.0.0` continúa reservada para la
+Parte 10 y no se publica en esta etapa.
 
 ## Qué entró en la Parte 5
 

@@ -10,6 +10,11 @@ coverage/
 *.tmp
 *.bak
 *.log
+*.key
+*.pem
+*.p12
+*.pfx
+tauri-signing-private*
 .DS_Store
 
 # Datos reales y copias personales: nunca deben entrar al repositorio.

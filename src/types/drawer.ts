@@ -59,6 +59,7 @@ export interface PersistedState {
   schemaVersion: number;
   drawers: Drawer[];
   preferences: Preferences;
+  dock: import("./dock").DockState;
   panels: import("./panel").Panel[];
 }
 
@@ -66,12 +67,28 @@ export interface Preferences {
   startWithWindows: boolean;
   hideAdminOnMinimize: boolean;
   startSilently: boolean;
+  checkUpdatesAutomatically: boolean;
+  lastUpdateCheck: number;
+  lastNotifiedVersion: string | null;
+  performanceMode: boolean;
+  animationMode: "normal" | "reduced" | "disabled";
+  defaultPanelDensity: import("./panel").PanelDensity;
+  defaultPanelIconMode: import("./panel").PanelIconMode;
+  defaultPanelSnapEnabled: boolean;
+  defaultPanelLocked: boolean;
 }
 
 export interface PreferencesPatch {
   startWithWindows?: boolean;
   hideAdminOnMinimize?: boolean;
   startSilently?: boolean;
+  checkUpdatesAutomatically?: boolean;
+  performanceMode?: boolean;
+  animationMode?: Preferences["animationMode"];
+  defaultPanelDensity?: Preferences["defaultPanelDensity"];
+  defaultPanelIconMode?: Preferences["defaultPanelIconMode"];
+  defaultPanelSnapEnabled?: boolean;
+  defaultPanelLocked?: boolean;
 }
 
 export interface DrawerBreadcrumb {
@@ -123,6 +140,8 @@ export interface StoragePathsInfo {
   root: string;
   drawers: string;
   dock: string;
+  backups: string;
+  logs: string;
   masterSave: string;
 }
 
@@ -136,4 +155,40 @@ export interface RecoveryStatus {
 export interface ItemActionResult {
   drawer: Drawer;
   message: string;
+}
+
+export interface BackupInfo {
+  fileName: string;
+  createdAt: number;
+  size: number;
+  schemaVersion: number | null;
+  valid: boolean;
+}
+
+export interface BackupCenter {
+  saveValid: boolean;
+  backups: BackupInfo[];
+  storage: StoragePathsInfo;
+}
+
+export interface HealthItem {
+  label: string;
+  ok: boolean;
+  detail: string;
+}
+
+export interface DiagnosticReport {
+  appVersion: string;
+  schemaVersion: number;
+  dataPath: string;
+  saveValid: boolean;
+  drawerCount: number;
+  dockItemCount: number;
+  panelCount: number;
+  monitors: MonitorInfo[];
+  startWithWindows: boolean;
+  updaterStatus: string;
+  backupCount: number;
+  health: HealthItem[];
+  text: string;
 }

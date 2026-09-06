@@ -2,6 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AddItemsResult,
+  BackupCenter,
+  BackupInfo,
+  DiagnosticReport,
   Drawer,
   DrawerLevel,
   DrawerIconSize,
@@ -12,6 +15,7 @@ import type {
   Preferences,
   PreferencesPatch,
   RecoveryStatus,
+  HealthItem,
   StoragePathsInfo,
 } from "../types/drawer";
 
@@ -27,6 +31,24 @@ export const drawerApi = {
   updatePreferences: (patch: PreferencesPatch) =>
     invoke<Preferences>("update_preferences", { patch }),
   getRecoveryStatus: () => invoke<RecoveryStatus>("get_recovery_status"),
+  getBackupCenter: () => invoke<BackupCenter>("get_backup_center"),
+  createBackup: () => invoke<BackupInfo>("create_configuration_backup"),
+  restoreBackup: (fileName: string) =>
+    invoke<PersistedState>("restore_configuration_backup", { fileName }),
+  deleteBackup: (fileName: string) =>
+    invoke<void>("delete_configuration_backup", { fileName }),
+  exportBackup: (fileName: string) =>
+    invoke<string | null>("export_configuration_backup", { fileName }),
+  prepareUpdate: () => invoke<BackupInfo>("prepare_application_update"),
+  recordUpdateCheck: (notifiedVersion: string | null) =>
+    invoke<Preferences>("record_update_check", { notifiedVersion }),
+  openDataRoot: () => invoke<void>("open_data_root"),
+  openLogsRoot: () => invoke<void>("open_logs_root"),
+  clearLogs: () => invoke<void>("clear_logs"),
+  checkHealth: () => invoke<HealthItem[]>("check_application_health"),
+  getDiagnosticReport: () => invoke<DiagnosticReport>("get_diagnostic_report"),
+  resetVisualConfiguration: () =>
+    invoke<PersistedState>("reset_visual_configuration"),
   addItems: (drawerId: string, paths: string[]) =>
     invoke<AddItemsResult>("add_drawer_items", { drawerId, paths }),
   removeItem: (drawerId: string, itemId: string) =>

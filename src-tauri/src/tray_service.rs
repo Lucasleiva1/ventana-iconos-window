@@ -5,8 +5,8 @@ use tauri::{
 };
 
 use crate::{
-    commands, dock_commands, panel_commands, shell_service::ShellService, storage_service::StorageService,
-    window_service,
+    commands, dock_commands, panel_commands, shell_service::ShellService,
+    storage_service::StorageService, window_service,
 };
 
 pub const TRAY_ID: &str = "desktop-organizer-tray";
@@ -159,7 +159,9 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
                 .map_err(|error| error.to_string())
         }),
         QUIT => {
+            panel_commands::capture_open_panel_geometry(app);
             commands::capture_open_drawer_geometry(app);
+            let _ = crate::log_service::LogService::info("Salida solicitada desde el System Tray");
             app.exit(0);
             Ok(())
         }

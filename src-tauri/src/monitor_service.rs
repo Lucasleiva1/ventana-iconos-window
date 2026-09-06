@@ -3,8 +3,8 @@ use tauri::{Monitor, WebviewWindow};
 
 use crate::model::{
     COLLAPSED_HEIGHT, DEFAULT_DRAWER_HEIGHT, DEFAULT_DRAWER_WIDTH, Drawer, MIN_DRAWER_HEIGHT,
-    MIN_DRAWER_WIDTH, PANEL_DEFAULT_HEIGHT, PANEL_DEFAULT_WIDTH, PANEL_MIN_HEIGHT,
-    PANEL_MIN_WIDTH, PANEL_SAFETY_MARGIN, Panel,
+    MIN_DRAWER_WIDTH, PANEL_DEFAULT_HEIGHT, PANEL_DEFAULT_WIDTH, PANEL_MIN_HEIGHT, PANEL_MIN_WIDTH,
+    PANEL_SAFETY_MARGIN, Panel,
 };
 
 const WORK_AREA_MARGIN_PHYSICAL: i32 = 8;
@@ -143,10 +143,10 @@ pub fn target_monitor<'a>(drawer: &Drawer, monitors: &'a [Monitor]) -> Option<&'
 pub fn panel_limits(monitor: &Monitor) -> (f64, f64) {
     let scale = monitor.scale_factor().max(0.1);
     let area = monitor.work_area();
-    let width = (f64::from(area.size.width) / scale - PANEL_SAFETY_MARGIN * 2.0)
-        .max(PANEL_MIN_WIDTH);
-    let height = (f64::from(area.size.height) / scale - PANEL_SAFETY_MARGIN * 2.0)
-        .max(PANEL_MIN_HEIGHT);
+    let width =
+        (f64::from(area.size.width) / scale - PANEL_SAFETY_MARGIN * 2.0).max(PANEL_MIN_WIDTH);
+    let height =
+        (f64::from(area.size.height) / scale - PANEL_SAFETY_MARGIN * 2.0).max(PANEL_MIN_HEIGHT);
     (width, height)
 }
 
@@ -168,8 +168,12 @@ pub fn normalize_panel(panel: &mut Panel, monitors: &[Monitor]) {
     if !panel.height.is_finite() {
         panel.height = PANEL_DEFAULT_HEIGHT;
     }
-    panel.width = panel.width.clamp(minimum_width.min(maximum_width), maximum_width);
-    panel.height = panel.height.clamp(minimum_height.min(maximum_height), maximum_height);
+    panel.width = panel
+        .width
+        .clamp(minimum_width.min(maximum_width), maximum_width);
+    panel.height = panel
+        .height
+        .clamp(minimum_height.min(maximum_height), maximum_height);
 
     let area = monitor.work_area();
     let scale = monitor.scale_factor().max(0.1);
@@ -259,7 +263,6 @@ pub fn normalize_drawer(drawer: &mut Drawer, monitors: &[Monitor]) {
     drawer.x = i64::from(drawer.x).clamp(i64::from(minimum_x), maximum_x) as i32;
     drawer.y = i64::from(drawer.y).clamp(i64::from(minimum_y), maximum_y) as i32;
 }
-
 
 /// Reparte los Paneles que quedaron exactamente superpuestos.
 ///

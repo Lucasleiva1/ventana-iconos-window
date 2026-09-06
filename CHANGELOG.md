@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.0 — 2026-09-06
+
+### Agregado
+
+- Centro de configuración global para inicio, comportamiento del Administrador, rendimiento, animaciones y valores predeterminados de Paneles.
+- Centro de backup con estado del save, ocho copias rotativas, creación manual, listado, restauración, exportación y eliminación segura.
+- Diagnóstico copiable sin secretos, health check, carpeta de datos accesible y logs locales rotativos limitados a cinco archivos de 1 MiB.
+- Búsqueda automática de actualizaciones como máximo cada 24 horas, notas/fecha de Release y backup obligatorio antes de instalar.
+
+### Cambiado
+
+- `schemaVersion` pasa de 8 a 9 mediante migraciones encadenadas directas desde todos los schemas anteriores admitidos.
+- Importar configuración crea un backup previo e integra Cajones, Dock, Paneles y preferencias globales antes de reconstruir sus ventanas.
+- El modo rendimiento y las animaciones se aplican coherentemente a todas las ventanas y respetan `prefers-reduced-motion`.
+- Tray → Salir captura también la geometría pendiente de Paneles antes del último guardado.
+- Versión estable alineada como `0.4.0`, preparada para distribución manual y futuras actualizaciones firmadas.
+
+### Seguridad
+
+- La validación recupera módulos sanos aunque Dock, un Cajón o un Panel aislado sean inválidos; rutas rotas quedan no disponibles sin provocar un crash.
+- Restaurar, importar, resetear visualmente o instalar una actualización conserva un backup del estado anterior y nunca elimina contenido físico de Cajones.
+- `.gitignore` bloquea formatos habituales de claves privadas y certificados de firma.
+
 ## 0.3.0
 
 Tercer módulo completo: **Paneles organizadores adaptativos**. Cajones, Dock y

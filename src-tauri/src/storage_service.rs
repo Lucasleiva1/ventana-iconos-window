@@ -31,6 +31,7 @@ pub const APP_FOLDER_NAME: &str = "Desktop Organizer";
 pub const DRAWERS_FOLDER_NAME: &str = "Cajones";
 pub const DOCK_FOLDER_NAME: &str = "Dock - Accesos";
 pub const BACKUPS_FOLDER_NAME: &str = "Backups";
+pub const LOGS_FOLDER_NAME: &str = "Logs";
 pub const MASTER_SAVE_NAME: &str = "desktop-organizer-save.json";
 pub const DRAWER_METADATA_NAME: &str = ".drawer.json";
 pub const DOCK_METADATA_NAME: &str = ".dock.json";
@@ -45,6 +46,7 @@ pub struct StoragePaths {
     pub drawers: PathBuf,
     pub dock: PathBuf,
     pub backups: PathBuf,
+    pub logs: PathBuf,
     pub master_save: PathBuf,
 }
 
@@ -56,6 +58,8 @@ pub struct StoragePathsInfo {
     pub root: PathBuf,
     pub drawers: PathBuf,
     pub dock: PathBuf,
+    pub backups: PathBuf,
+    pub logs: PathBuf,
     pub master_save: PathBuf,
 }
 
@@ -67,6 +71,8 @@ impl From<&StoragePaths> for StoragePathsInfo {
             root: paths.root.clone(),
             drawers: paths.drawers.clone(),
             dock: paths.dock.clone(),
+            backups: paths.backups.clone(),
+            logs: paths.logs.clone(),
             master_save: paths.master_save.clone(),
         }
     }
@@ -106,6 +112,7 @@ impl StorageService {
             drawers: root.join(DRAWERS_FOLDER_NAME),
             dock: root.join(DOCK_FOLDER_NAME),
             backups: root.join(BACKUPS_FOLDER_NAME),
+            logs: root.join(LOGS_FOLDER_NAME),
             master_save: root.join(MASTER_SAVE_NAME),
             documents,
             root,
@@ -118,7 +125,9 @@ impl StorageService {
         fs::create_dir_all(&paths.dock)
             .map_err(|error| format!("No se pudo crear {}: {error}", paths.dock.display()))?;
         fs::create_dir_all(&paths.backups)
-            .map_err(|error| format!("No se pudo crear {}: {error}", paths.backups.display()))
+            .map_err(|error| format!("No se pudo crear {}: {error}", paths.backups.display()))?;
+        fs::create_dir_all(&paths.logs)
+            .map_err(|error| format!("No se pudo crear {}: {error}", paths.logs.display()))
     }
 
     pub fn provision_drawer(drawer: &mut Drawer, paths: &StoragePaths) -> Result<(), String> {
@@ -851,6 +860,7 @@ mod tests {
             drawers: app_root.join("Cajones"),
             dock: app_root.join("Dock - Accesos"),
             backups: app_root.join("Backups"),
+            logs: app_root.join("Logs"),
             master_save: app_root.join("desktop-organizer-save.json"),
             root: app_root,
         }

@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub const SCHEMA_VERSION: u32 = 8;
+pub const SCHEMA_VERSION: u32 = 9;
 pub const DEFAULT_DRAWER_WIDTH: f64 = 460.0;
 pub const DEFAULT_DRAWER_HEIGHT: f64 = 300.0;
 pub const COLLAPSED_HEIGHT: f64 = 48.0;
@@ -545,11 +545,8 @@ impl Panel {
     pub fn minimum_size(&self) -> (f64, f64) {
         let padding = self.density.padding() * 2.0;
         let width = (PANEL_MIN_ICON + 26.0 + padding).max(PANEL_MIN_WIDTH);
-        let height = self.header_mode.height()
-            + PANEL_MIN_ICON
-            + 24.0
-            + padding
-            + self.density.gap();
+        let height =
+            self.header_mode.height() + PANEL_MIN_ICON + 24.0 + padding + self.density.gap();
         (width, height.max(PANEL_MIN_HEIGHT))
     }
 
@@ -659,6 +656,24 @@ pub struct Preferences {
     pub hide_admin_on_minimize: bool,
     #[serde(default = "default_true")]
     pub start_silently: bool,
+    #[serde(default = "default_true")]
+    pub check_updates_automatically: bool,
+    #[serde(default)]
+    pub last_update_check: u64,
+    #[serde(default)]
+    pub last_notified_version: Option<String>,
+    #[serde(default)]
+    pub performance_mode: bool,
+    #[serde(default)]
+    pub animation_mode: DockAnimationMode,
+    #[serde(default)]
+    pub default_panel_density: PanelDensity,
+    #[serde(default)]
+    pub default_panel_icon_mode: PanelIconMode,
+    #[serde(default = "default_true")]
+    pub default_panel_snap_enabled: bool,
+    #[serde(default)]
+    pub default_panel_locked: bool,
 }
 
 impl Default for Preferences {
@@ -667,6 +682,15 @@ impl Default for Preferences {
             start_with_windows: false,
             hide_admin_on_minimize: true,
             start_silently: true,
+            check_updates_automatically: true,
+            last_update_check: 0,
+            last_notified_version: None,
+            performance_mode: false,
+            animation_mode: DockAnimationMode::Normal,
+            default_panel_density: PanelDensity::Normal,
+            default_panel_icon_mode: PanelIconMode::Auto,
+            default_panel_snap_enabled: true,
+            default_panel_locked: false,
         }
     }
 }
@@ -713,6 +737,13 @@ pub struct PreferencesPatch {
     pub start_with_windows: Option<bool>,
     pub hide_admin_on_minimize: Option<bool>,
     pub start_silently: Option<bool>,
+    pub check_updates_automatically: Option<bool>,
+    pub performance_mode: Option<bool>,
+    pub animation_mode: Option<DockAnimationMode>,
+    pub default_panel_density: Option<PanelDensity>,
+    pub default_panel_icon_mode: Option<PanelIconMode>,
+    pub default_panel_snap_enabled: Option<bool>,
+    pub default_panel_locked: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]

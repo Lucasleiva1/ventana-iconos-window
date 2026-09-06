@@ -1,6 +1,6 @@
 # Desktop Organizer
 
-Desktop Organizer es una aplicación nativa para Windows que organiza el Escritorio mediante cajones visuales respaldados por carpetas físicas reales y un Dock retráctil de accesos rápidos. La versión `0.2.1` estabiliza el almacenamiento y la actualización del Dock.
+Desktop Organizer es una aplicación nativa y local-first para Windows. Integra Cajones con almacenamiento físico, un Dock retráctil y Paneles de referencias. La versión `0.4.0` incorpora la configuración global y la recuperación integral de la Parte 9.
 
 ## Qué incluye
 
@@ -9,9 +9,11 @@ Desktop Organizer es una aplicación nativa para Windows que organiza el Escrito
 - Arrastrar y soltar desde el Escritorio, restauración al Escritorio y movimiento entre cajones.
 - Subcajones físicos, navegación por niveles y orden visual persistente.
 - System Tray con una sola instancia, ocultamiento del administrador e inicio opcional con Windows.
-- Guardado atómico, cinco backups rotativos, recuperación automática y reconstrucción desde disco.
+- Guardado maestro versionado y atómico, ocho backups rotativos, recuperación automática y reconstrucción desde disco.
 - Importación y exportación de configuración.
 - Dock retráctil configurable con accesos, separadores, shortcut global, reparación de rutas y orden persistente.
+- Centro de Configuración con preferencias globales, rendimiento, actualizaciones, backups y diagnóstico.
+- Logs locales rotativos, health check y reporte de diagnóstico sin secretos ni contenido personal.
 
 ## Los tres sistemas
 
@@ -78,8 +80,8 @@ Consultá [RECOVERY.md](RECOVERY.md) para recuperación manual y reinstalación.
 
 ## Instalación
 
-1. Descargá `Desktop-Organizer-v0.2.1-Setup.exe` desde GitHub Releases.
-2. Verificá su SHA-256 con el archivo `SHA256SUMS.txt` de la misma Release.
+1. Descargá `Desktop-Organizer-v0.4.0-Setup.exe` desde GitHub Releases.
+2. Verificá su SHA-256 con `SHA256SUMS-v0.4.0.txt` de la misma Release.
 3. Ejecutá el instalador. La instalación es por usuario y no requiere privilegios de administrador.
 4. Abrí **Desktop Organizer** desde el menú Inicio.
 
@@ -112,6 +114,22 @@ La sección **DOCK** del Administrador permite elegir monitor, ancho automático
 
 La diferencia es intencional: cada **Cajón** tiene su carpeta física propia dentro de `Cajones`; el **Dock** usa una única carpeta física diferenciada llamada `Dock - Accesos`.
 
+## Configuración, backups y diagnóstico
+
+El **Centro de configuración** reúne el inicio con Windows, inicio silencioso, cierre del Administrador, rendimiento global, animaciones y valores predeterminados de Paneles. Las opciones específicas de cada Cajón, Dock o Panel continúan junto a ese módulo y se guardan en el mismo estado maestro.
+
+**Crear backup ahora** guarda configuración, metadata, referencias, posiciones y orden. No copia los archivos físicos de Cajones ni el contenido de `Dock - Accesos`. Desde el mismo centro se puede listar, validar, restaurar, exportar o eliminar cada copia. Antes de importar, restaurar, resetear la apariencia o instalar una actualización se preserva el estado actual.
+
+**Restablecer configuración visual** devuelve apariencia y posiciones a valores seguros, pero conserva archivos, accesos y referencias. **Comprobar estado** revisa rápidamente save, carpetas, backups y updater. El informe copiable reemplaza el perfil de usuario por `%USERPROFILE%` y omite tokens, secretos y nombres de documentos.
+
+Los logs se escriben sólo para eventos útiles, rotan al llegar a 1 MiB y mantienen como máximo cinco archivos. No hay telemetría ni envío automático.
+
+## Actualizaciones
+
+Configuración → **Actualizaciones** consulta `latest.json` de las Releases del repositorio oficial. Tauri compara versiones SemVer y verifica el paquete con la clave pública incorporada; la clave privada permanece fuera del repositorio. La búsqueda automática ocurre como máximo una vez cada 24 horas y un error de red no afecta el funcionamiento local.
+
+La instalación siempre requiere una acción del usuario y crea primero un backup de configuración. Actualizar o reinstalar no elimina `Documentos\Desktop Organizer`. No se implementa rollback binario improvisado: ante una descarga o instalación fallida se conserva la versión operativa cuando el instalador lo permite y, en todos los casos, los datos permanecen fuera de la carpeta de instalación.
+
 ## Ubicación de datos
 
 Dentro de la carpeta Documentos conocida por Windows:
@@ -121,13 +139,15 @@ Desktop Organizer\
 ├── Cajones\
 ├── Dock - Accesos\
 ├── Backups\
+├── Logs\
 └── desktop-organizer-save.json
 ```
 
 - `Cajones`: contenido real del usuario.
 - `Dock - Accesos`: elementos y accesos reales mostrados por el Dock. Incluye una metadata oculta `.dock.json` con nombres, IDs, separadores y orden, por lo que la carpeta completa sirve como copia de seguridad.
-- `desktop-organizer-save.json`: apariencia, posiciones, IDs, orden y preferencias generales.
-- `Backups`: hasta cinco copias recientes válidas del save y, cuando corresponde, copias preservadas de saves corruptos.
+- `desktop-organizer-save.json`: configuración y organización; nunca contiene los archivos del usuario.
+- `Backups`: hasta ocho copias recientes válidas del save y, cuando corresponde, copias preservadas de saves corruptos.
+- `Logs`: hasta cinco archivos locales rotativos de diagnóstico.
 - `.drawer.json`: metadata oculta mínima de identidad dentro de cada cajón o subcajón.
 
 ## Tecnologías
@@ -170,4 +190,8 @@ Los assets firmados requieren las variables de entorno privadas de Tauri. La cla
 `v0.2.0`: Dock avanzado.
 
 `v0.2.1`: carpeta física recuperable para el Dock, actualizador integrado y
-prioridad visual compatible con aplicaciones fullscreen. Parte 7 pendiente.
+prioridad visual compatible con aplicaciones fullscreen.
+
+`v0.3.0`: Paneles avanzados completos.
+
+`v0.4.0`: Parte 9 completa: configuración global, recuperación, updater, diagnóstico y optimización.

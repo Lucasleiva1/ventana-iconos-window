@@ -23,6 +23,7 @@ use crate::{
     },
     monitor_service::{self},
     panel_service,
+    persistence::PersistenceService,
     shell_service::ShellService,
     state::AppState,
     storage_service::comparable_path,
@@ -146,6 +147,11 @@ pub async fn create_panel(
     let (x, y, monitor_id) =
         monitor_service::default_placement(&window, current.drawers.len() + current.panels.len())?;
     let mut panel = Panel::new(name, x, y, monitor_id, now_millis());
+    panel.density = current.preferences.default_panel_density;
+    panel.icon_mode = current.preferences.default_panel_icon_mode;
+    panel.auto_icon_size = panel.icon_mode == crate::model::PanelIconMode::Auto;
+    panel.snap_enabled = current.preferences.default_panel_snap_enabled;
+    panel.locked = current.preferences.default_panel_locked;
     let monitors = window
         .available_monitors()
         .map_err(|error| format!("No se pudieron detectar los monitores: {error}"))?;
@@ -447,6 +453,70 @@ pub fn record_panel_geometry(
     commit(&app, &snapshot)
 }
 
+/// Captura una última vez todas las geometrías nativas antes de salir. Esto
+/// cubre el pequeño intervalo en el que todavía puede estar pendiente el
+/// debounce de una ventana React.
+pub fn capture_open_panel_geometry(app: &AppHandle) {
+    struct Geometry {
+        id: String,
+        x: i32,
+        y: i32,
+        width: f64,
+        height: f64,
+        monitor_id: Option<String>,
+    }
+    let geometries: Vec<Geometry> = app
+        .webview_windows()
+        .into_values()
+        .filter_map(|window| {
+            let id = panel_service::panel_id_from_label(window.label())?.to_owned();
+            let position = window.outer_position().ok()?;
+            let size = window.inner_size().ok()?;
+            let scale = window.scale_factor().ok()?.max(0.1);
+            let monitor_id = window
+                .current_monitor()
+                .ok()
+                .flatten()
+                .as_ref()
+                .map(monitor_service::monitor_id);
+            Some(Geometry {
+                id,
+                x: position.x,
+                y: position.y,
+                width: f64::from(size.width) / scale,
+                height: f64::from(size.height) / scale,
+                monitor_id,
+            })
+        })
+        .collect();
+    let timestamp = now_millis();
+    let state = app.state::<AppState>();
+    if let Ok(snapshot) = state.update(|current| {
+        for geometry in &geometries {
+            if let Some(panel) = current
+                .panels
+                .iter_mut()
+                .find(|panel| panel.id == geometry.id)
+            {
+                panel.x = geometry.x;
+                panel.y = geometry.y;
+                panel.width = geometry.width;
+                panel.height = geometry.height;
+                if let Some(monitor_id) = &geometry.monitor_id {
+                    panel.monitor_id.clone_from(monitor_id);
+                }
+                panel.updated_at = timestamp;
+            }
+        }
+        Ok(())
+    }) && let Err(error) = PersistenceService::save(app, &snapshot)
+    {
+        let _ = crate::log_service::LogService::error(&format!(
+            "No se pudo guardar la geometría de Paneles antes de salir: {error}"
+        ));
+    }
+}
+
 /// Expande el Panel al área útil del monitor, o lo devuelve al tamaño anterior.
 /// No usa el maximizado de Windows: es un resize controlado.
 #[tauri::command]
@@ -470,9 +540,9 @@ pub fn set_panel_expanded(
         panel_service::expanded_geometry(&panel, &monitors)
             .ok_or_else(|| "No se pudo calcular el área útil del monitor".to_owned())?
     } else {
-        panel.previous_geometry.ok_or_else(|| {
-            "No hay un tamaño anterior guardado para restaurar".to_owned()
-        })?
+        panel
+            .previous_geometry
+            .ok_or_else(|| "No hay un tamaño anterior guardado para restaurar".to_owned())?
     };
     let previous = if expanded {
         Some(PanelGeometry {
@@ -812,7 +882,11 @@ fn mark_availability(
     let item_id = item_id.to_owned();
     let now = now_millis();
     let snapshot = state.update(move |app_state| {
-        if let Some(panel) = app_state.panels.iter_mut().find(|panel| panel.id == panel_id) {
+        if let Some(panel) = app_state
+            .panels
+            .iter_mut()
+            .find(|panel| panel.id == panel_id)
+        {
             if let Some(item) = panel.items.iter_mut().find(|item| item.id == item_id) {
                 item.available = available;
             }
@@ -934,7 +1008,6 @@ pub fn refresh_panel_availability(
     panel_from_snapshot(&snapshot, &panel_id)
 }
 
-
 /// Quita varios accesos de una sola vez (selección múltiple).
 /// Como siempre, sólo elimina referencias: ningún archivo real se toca.
 #[tauri::command]
@@ -950,7 +1023,9 @@ pub fn remove_panel_items(
     ensure_content_unlocked(&panel)?;
     let targets: HashSet<&str> = item_ids.iter().map(String::as_str).collect();
     let before = panel.items.len();
-    panel.items.retain(|item| !targets.contains(item.id.as_str()));
+    panel
+        .items
+        .retain(|item| !targets.contains(item.id.as_str()));
     if panel.items.len() == before {
         return Err("Ninguno de esos accesos está en el panel".to_owned());
     }

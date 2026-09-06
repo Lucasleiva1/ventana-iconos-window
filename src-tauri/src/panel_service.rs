@@ -51,12 +51,13 @@ pub fn create_panel_window(
         return Ok(existing);
     }
 
-    let (maximum_width, maximum_height) = monitor_for(&panel.monitor_id, panel.x, panel.y, monitors)
-        .map(panel_limits)
-        .unwrap_or((
-            panel.width.max(PANEL_MIN_WIDTH),
-            panel.height.max(PANEL_MIN_HEIGHT),
-        ));
+    let (maximum_width, maximum_height) =
+        monitor_for(&panel.monitor_id, panel.x, panel.y, monitors)
+            .map(panel_limits)
+            .unwrap_or((
+                panel.width.max(PANEL_MIN_WIDTH),
+                panel.height.max(PANEL_MIN_HEIGHT),
+            ));
     let url = WebviewUrl::App(format!("index.html?panel={}", panel.id).into());
     let (minimum_width, minimum_height) = panel.minimum_size();
 
@@ -174,7 +175,6 @@ pub fn restore_panels(app: &AppHandle, panels: &[Panel], monitors: &[Monitor]) {
         }
     }
 }
-
 
 // --- Imantado a bordes y a otros Paneles ------------------------------------
 
