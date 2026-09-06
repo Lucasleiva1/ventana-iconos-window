@@ -8,8 +8,14 @@ import {
   type MouseEvent,
 } from "react";
 import { createPortal } from "react-dom";
+import {
+  DRAWER_ITEM_NAMES_VISIBLE,
+  DRAWER_STORAGE_BADGES_VISIBLE,
+  SUBDRAWERS_ENABLED,
+} from "../../features";
 import { drawerApi } from "../../services/drawerApi";
 import { iconService } from "../../services/iconService";
+import { useDrawerDialogs } from "./DrawerDialogs";
 import {
   hasInternalDrag,
   joinDrawerPath,
@@ -56,6 +62,7 @@ export function DrawerItemView({
   onMoveInto,
   onFeedback,
 }: DrawerItemViewProps) {
+  const dialogs = useDrawerDialogs();
   const [icon, setIcon] = useState<string | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ left: number; top: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -183,10 +190,10 @@ export function DrawerItemView({
           </span>
         )}
       </span>
-      <span className="drawer-item-name">{item.displayName}</span>
-      <span className={`storage-mode-badge is-${item.storageMode}`}>
+      {DRAWER_ITEM_NAMES_VISIBLE && <span className="drawer-item-name">{item.displayName}</span>}
+      {DRAWER_STORAGE_BADGES_VISIBLE && <span className={`storage-mode-badge is-${item.storageMode}`}>
         {item.isSubdrawer ? "Subcajón" : item.storageMode === "managed" ? "Guardado" : "Vínculo"}
-      </span>
+      </span>}
       {item.storageMode === "managed" && (
         <button
           className="drawer-item-drag-out"
@@ -236,16 +243,21 @@ export function DrawerItemView({
                 <strong>Restaurar al Escritorio</strong>
                 <span>Lo devuelve al Escritorio real</span>
               </button>
-              {item.type === "folder" && !item.isSubdrawer && (
+              {SUBDRAWERS_ENABLED && item.type === "folder" && !item.isSubdrawer && (
                 <button type="button" role="menuitem" onClick={(event) => void run(event, () => drawerApi.convertFolderToSubdrawer(drawer.id, relativePath, item.id))}>
                   <strong>Convertir en subcajón</strong>
                   <span>Conserva todo el contenido</span>
                 </button>
               )}
-              {item.isSubdrawer && (
+              {SUBDRAWERS_ENABLED && item.isSubdrawer && (
                 <>
                   <button type="button" role="menuitem" onClick={(event) => void run(event, async () => {
-                    const name = window.prompt("Nuevo nombre del subcajón", item.displayName)?.trim();
+                    const name = await dialogs.askText({
+                      title: "Renombrar subcajón",
+                      label: "Nuevo nombre",
+                      defaultValue: item.displayName,
+                      confirmLabel: "Renombrar",
+                    });
                     if (name && name !== item.displayName) {
                       await drawerApi.renameSubdrawer(drawer.id, relativePath, item.id, name);
                     }

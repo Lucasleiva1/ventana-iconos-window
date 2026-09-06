@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
+import { drawerApi } from "../../services/drawerApi";
 import { panelApi } from "../../services/panelApi";
-import type { MonitorInfo } from "../../types/drawer";
+import type { MonitorInfo, Preferences, PreferencesPatch } from "../../types/drawer";
 import type { Panel, PanelAlignment } from "../../types/panel";
 
 const ALIGNMENTS: Array<{ value: PanelAlignment; label: string }> = [
@@ -13,11 +14,20 @@ const ALIGNMENTS: Array<{ value: PanelAlignment; label: string }> = [
 interface PanelsSectionProps {
   panels: Panel[];
   monitors: MonitorInfo[];
+  preferences: Preferences | null;
+  onPreferences: (preferences: Preferences) => void;
   onError: (message: string | null) => void;
   onMessage: (message: string) => void;
 }
 
-export function PanelsSection({ panels, monitors, onError, onMessage }: PanelsSectionProps) {
+export function PanelsSection({
+  panels,
+  monitors,
+  preferences,
+  onPreferences,
+  onError,
+  onMessage,
+}: PanelsSectionProps) {
   const [newPanelName, setNewPanelName] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -29,6 +39,12 @@ export function PanelsSection({ panels, monitors, onError, onMessage }: PanelsSe
     } catch (reason) {
       onError(String(reason));
     }
+  }
+
+  async function updatePanelDefaults(patch: PreferencesPatch) {
+    await run(async () => {
+      onPreferences(await drawerApi.updatePreferences(patch));
+    }, "Preferencia para nuevos paneles guardada.");
   }
 
   async function createPanel(event: FormEvent<HTMLFormElement>) {
@@ -80,6 +96,63 @@ export function PanelsSection({ panels, monitors, onError, onMessage }: PanelsSe
             Ocultar todos
           </button>
         </div>
+      </div>
+
+      <div className="panel-defaults">
+        <div>
+          <p className="eyebrow">NUEVOS PANELES</p>
+          <strong>Valores predeterminados</strong>
+          <small>Se aplican cuando creás un panel nuevo.</small>
+        </div>
+        <label className="setting-field">
+          <span>Densidad</span>
+          <select
+            value={preferences?.defaultPanelDensity ?? "normal"}
+            disabled={!preferences}
+            onChange={(event) => void updatePanelDefaults({
+              defaultPanelDensity: event.target.value as Preferences["defaultPanelDensity"],
+            })}
+          >
+            <option value="compact">Compacta</option>
+            <option value="normal">Normal</option>
+            <option value="wide">Amplia</option>
+          </select>
+        </label>
+        <label className="setting-field">
+          <span>Iconos</span>
+          <select
+            value={preferences?.defaultPanelIconMode ?? "auto"}
+            disabled={!preferences}
+            onChange={(event) => void updatePanelDefaults({
+              defaultPanelIconMode: event.target.value as Preferences["defaultPanelIconMode"],
+            })}
+          >
+            <option value="auto">Automáticos</option>
+            <option value="manual">Manuales</option>
+          </select>
+        </label>
+        <label className="compact-toggle">
+          <input
+            type="checkbox"
+            checked={preferences?.defaultPanelSnapEnabled ?? true}
+            disabled={!preferences}
+            onChange={(event) => void updatePanelDefaults({
+              defaultPanelSnapEnabled: event.target.checked,
+            })}
+          />
+          <span>Imantado</span>
+        </label>
+        <label className="compact-toggle">
+          <input
+            type="checkbox"
+            checked={preferences?.defaultPanelLocked ?? false}
+            disabled={!preferences}
+            onChange={(event) => void updatePanelDefaults({
+              defaultPanelLocked: event.target.checked,
+            })}
+          />
+          <span>Bloqueado</span>
+        </label>
       </div>
 
       {sorted.length > 1 && (

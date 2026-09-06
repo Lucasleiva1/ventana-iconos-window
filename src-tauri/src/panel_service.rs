@@ -70,7 +70,10 @@ pub fn create_panel_window(
         .resizable(!panel.locked)
         .decorations(false)
         .transparent(true)
-        .shadow(true)
+        // Sin sombra del sistema: Windows la acompaña con un marco de 1 px
+        // recto que asoma en las esquinas por fuera del redondeo. El Dock ya
+        // se creaba así.
+        .shadow(false)
         // Los Paneles no llenan la barra de tareas ni ensucian Alt+Tab.
         .skip_taskbar(true)
         // Pertenecen al escritorio: nunca por encima de Chrome, DaVinci ni nada.

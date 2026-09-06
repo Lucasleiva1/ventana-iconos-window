@@ -336,11 +336,9 @@ export function PanelWindow({ panelId }: PanelWindowProps) {
   if (!state || !panel) return <div className="panel-fallback">Cargando…</div>;
 
   const visible = items.slice(virtual.from, virtual.to);
-  const background = panel.backgroundStyle === "minimal"
-    ? hexToRgba(panel.color, Math.min(panel.opacity, 0.22))
-    : panel.backgroundStyle === "translucent"
-      ? hexToRgba(panel.color, Math.min(panel.opacity, 0.62))
-      : hexToRgba(panel.color, panel.opacity);
+  // La barra de opacidad manda sola: el estilo de fondo ya no recorta el valor
+  // elegido, sólo describe el aspecto del panel.
+  const background = hexToRgba(panel.color, panel.opacity);
 
   return (
     <main

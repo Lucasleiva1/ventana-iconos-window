@@ -123,7 +123,7 @@ export function PanelOptionsMenu({
         <span>Opacidad · {Math.round(panel.opacity * 100)} %</span>
         <input
           type="range"
-          min={35}
+          min={0}
           max={100}
           value={Math.round(panel.opacity * 100)}
           onChange={(event) => onPatch({ opacity: Number(event.target.value) / 100 })}

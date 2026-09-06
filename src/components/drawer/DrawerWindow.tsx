@@ -5,6 +5,8 @@ import { drawerApi } from "../../services/drawerApi";
 import { dragDropService } from "../../services/dragDropService";
 import type { DrawerLevel } from "../../types/drawer";
 import { hexToRgba } from "../../utils/color";
+import { DRAWER_EMPTY_HINT_VISIBLE } from "../../features";
+import { DrawerDialogsProvider, useDrawerDialogs } from "./DrawerDialogs";
 import { DrawerHeader } from "./DrawerHeader";
 import { DrawerItemGrid } from "./DrawerItemGrid";
 import { DrawerSettings } from "./DrawerSettings";
@@ -16,7 +18,16 @@ interface DrawerWindowProps {
 const GEOMETRY_DEBOUNCE_MS = 420;
 
 export function DrawerWindow({ drawerId }: DrawerWindowProps) {
+  return (
+    <DrawerDialogsProvider>
+      <DrawerWindowView drawerId={drawerId} />
+    </DrawerDialogsProvider>
+  );
+}
+
+function DrawerWindowView({ drawerId }: DrawerWindowProps) {
   const { state, error } = useAppState();
+  const dialogs = useDrawerDialogs();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dropActive, setDropActive] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -130,7 +141,13 @@ export function DrawerWindow({ drawerId }: DrawerWindowProps) {
             return;
           }
           const details: string[] = [];
-          if (result.added.length) details.push(`${result.added.length} agregados`);
+          if (result.added.length === 1) {
+            // El nombre ya no queda fijo bajo el icono: el aviso es el que
+            // confirma qué se guardó, y se borra solo a los pocos segundos.
+            details.push(`Se agregó “${result.added[0].displayName}”`);
+          } else if (result.added.length > 1) {
+            details.push(`Se agregaron ${result.added.length} elementos`);
+          }
           if (result.duplicates.length) details.push(`${result.duplicates.length} duplicados`);
           if (result.failures.length) details.push(`${result.failures.length} sin agregar`);
           if (result.warnings.length) details.push(result.warnings.join(" · "));
@@ -154,7 +171,12 @@ export function DrawerWindow({ drawerId }: DrawerWindowProps) {
   }, [drawerId, loadLevel, relativePath]);
 
   async function createSubdrawer() {
-    const name = window.prompt("Nombre del nuevo subcajón")?.trim();
+    const name = await dialogs.askText({
+      title: "Nuevo subcajón",
+      label: "Nombre del subcajón",
+      placeholder: "Por ejemplo: Entregas",
+      confirmLabel: "Crear",
+    });
     if (!name) return;
     try {
       setLevel(await drawerApi.createSubdrawer(drawerId, relativePath, name));
@@ -178,6 +200,13 @@ export function DrawerWindow({ drawerId }: DrawerWindowProps) {
       <DrawerHeader
         drawer={drawer}
         itemCount={level.items.length}
+        level={level}
+        onNavigate={(path) => void loadLevel(path)}
+        onCreateSubdrawer={() => void createSubdrawer()}
+        onRefresh={() => void drawerApi
+          .refreshLevel(drawerId, relativePath)
+          .then(setLevel)
+          .catch((reason) => showFeedback(String(reason)))}
         settingsOpen={settingsOpen}
         onToggleSettings={() => {
           if (drawer.collapsed) {
@@ -189,32 +218,6 @@ export function DrawerWindow({ drawerId }: DrawerWindowProps) {
       />
       {!drawer.collapsed && (
         <section className="drawer-content">
-          <nav className="drawer-level-toolbar" aria-label="Ruta del subcajón">
-            <button
-              type="button"
-              className="level-back"
-              disabled={!level.relativePath}
-              onClick={() => {
-                const parent = level.breadcrumbs.at(-2)?.relativePath ?? "";
-                void loadLevel(parent);
-              }}
-              aria-label="Volver al nivel anterior"
-            >
-              ‹
-            </button>
-            <div className="drawer-breadcrumbs">
-              {level.breadcrumbs.map((crumb, index) => (
-                <span key={`${crumb.relativePath}-${index}`}>
-                  {index > 0 && <i>/</i>}
-                  <button type="button" onClick={() => void loadLevel(crumb.relativePath)}>
-                    {crumb.name}
-                  </button>
-                </span>
-              ))}
-            </div>
-            <button type="button" className="level-action" onClick={() => void createSubdrawer()} title="Nuevo subcajón">+▣</button>
-            <button type="button" className="level-action" onClick={() => void drawerApi.refreshLevel(drawerId, relativePath).then(setLevel).catch((reason) => showFeedback(String(reason)))} title="Actualizar nivel">↻</button>
-          </nav>
           {levelError && <div className="level-error">{levelError}</div>}
           {level.items.length ? (
             <DrawerItemGrid
@@ -228,7 +231,9 @@ export function DrawerWindow({ drawerId }: DrawerWindowProps) {
           ) : (
             <div className="drawer-empty-state">
               <span className="empty-diamond" aria-hidden="true">◇</span>
-              <span>Arrastrá elementos acá. Los del Escritorio se guardan físicamente; los demás quedan vinculados.</span>
+              {DRAWER_EMPTY_HINT_VISIBLE && (
+                <span>Arrastrá elementos acá. Los del Escritorio se guardan físicamente; los demás quedan vinculados.</span>
+              )}
             </div>
           )}
           {dropActive && (

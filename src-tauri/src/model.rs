@@ -9,7 +9,9 @@ pub const DEFAULT_DRAWER_HEIGHT: f64 = 300.0;
 pub const COLLAPSED_HEIGHT: f64 = 48.0;
 pub const MIN_DRAWER_WIDTH: f64 = 260.0;
 pub const MIN_DRAWER_HEIGHT: f64 = 120.0;
-pub const MIN_OPACITY: f64 = 0.45;
+/// La opacidad del fondo baja hasta cero: la barra va de fondo invisible a
+/// fondo sólido. La cabecera conserva su propio fondo para poder arrastrar.
+pub const MIN_OPACITY: f64 = 0.0;
 pub const DEFAULT_COLOR: &str = "#293548";
 
 // --- Paneles organizadores -------------------------------------------------
@@ -21,7 +23,7 @@ pub const PANEL_HEADER_HEIGHT: f64 = 34.0;
 /// Con esto el Panel siempre se puede volver a agarrar y volver a agrandar.
 pub const PANEL_MIN_WIDTH: f64 = 180.0;
 pub const PANEL_MIN_HEIGHT: f64 = PANEL_HEADER_HEIGHT + 86.0;
-pub const PANEL_MIN_OPACITY: f64 = 0.35;
+pub const PANEL_MIN_OPACITY: f64 = 0.0;
 pub const DEFAULT_PANEL_OPACITY: f64 = 0.94;
 /// Margen de seguridad respecto del área útil real del monitor.
 pub const PANEL_SAFETY_MARGIN: f64 = 12.0;
@@ -40,7 +42,7 @@ pub const DOCK_SIDE_MARGIN: f64 = 32.0;
 pub const DOCK_PADDING_X: f64 = 12.0;
 pub const DOCK_PADDING_Y: f64 = 10.0;
 pub const DOCK_CELL_PADDING: f64 = 16.0;
-pub const DOCK_MIN_OPACITY: f64 = 0.35;
+pub const DOCK_MIN_OPACITY: f64 = 0.0;
 pub const DOCK_HANDLE_WIDTH: f64 = 58.0;
 pub const DOCK_HANDLE_HEIGHT: f64 = 14.0;
 pub const DOCK_HANDLE_GAP: f64 = 6.0;

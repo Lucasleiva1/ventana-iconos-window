@@ -280,7 +280,7 @@ export function DockSettings({ monitors, onError, onMessage }: DockSettingsProps
           </span>
           <input
             type="range"
-            min={35}
+            min={0}
             max={100}
             step={1}
             value={Math.round((dock?.opacity ?? 0.92) * 100)}

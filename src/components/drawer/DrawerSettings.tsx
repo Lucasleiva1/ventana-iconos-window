@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { drawerApi } from "../../services/drawerApi";
 import type { Drawer } from "../../types/drawer";
+import { useDrawerDialogs } from "./DrawerDialogs";
 
 interface DrawerSettingsProps {
   drawer: Drawer;
@@ -8,6 +9,7 @@ interface DrawerSettingsProps {
 }
 
 export function DrawerSettings({ drawer, onClose }: DrawerSettingsProps) {
+  const dialogs = useDrawerDialogs();
   const [name, setName] = useState(drawer.name);
   const [error, setError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -39,12 +41,16 @@ export function DrawerSettings({ drawer, onClose }: DrawerSettingsProps) {
     }
   }
 
-  function remove() {
-    if (window.confirm(
-      `¿Quitar el cajón visual “${drawer.name}”?\n\nLa carpeta física y todos sus archivos quedan seguros en:\n${drawer.folderPath}`,
-    )) {
-      void run(() => drawerApi.remove(drawer.id));
-    }
+  async function remove() {
+    const confirmed = await dialogs.confirm({
+      title: `¿Quitar el cajón “${drawer.name}”?`,
+      message:
+        `La carpeta y todos sus archivos quedan seguros en ${drawer.folderPath}. `
+        + "Sólo se quita la ventana del Escritorio.",
+      confirmLabel: "Quitar cajón",
+      danger: true,
+    });
+    if (confirmed) void run(() => drawerApi.remove(drawer.id));
   }
 
   return (
@@ -85,7 +91,7 @@ export function DrawerSettings({ drawer, onClose }: DrawerSettingsProps) {
           <strong>{Math.round(drawer.opacity * 100)}%</strong>
           <input
             type="range"
-            min="45"
+            min="0"
             max="100"
             step="5"
             value={Math.round(drawer.opacity * 100)}

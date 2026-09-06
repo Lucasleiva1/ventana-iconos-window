@@ -84,7 +84,10 @@ pub fn create_drawer_window(
         .resizable(!drawer.locked && !drawer.collapsed)
         .decorations(false)
         .transparent(true)
-        .shadow(true)
+        // Sin sombra del sistema: Windows la acompaña con un marco de 1 px
+        // recto que asoma en las esquinas por fuera del redondeo. El Dock ya
+        // se creaba así.
+        .shadow(false)
         .skip_taskbar(true)
         .always_on_top(false)
         .visible(false)

@@ -6,6 +6,7 @@ import { DockWindow } from "./components/dock/DockWindow";
 import { PanelWindow } from "./components/panel/PanelWindow";
 import { drawerApi } from "./services/drawerApi";
 import type { Preferences } from "./types/drawer";
+import { resolveWindowKind } from "./windowKind";
 
 export function App() {
   useEffect(() => {
@@ -19,13 +20,12 @@ export function App() {
   }, []);
 
   const params = new URLSearchParams(window.location.search);
-  const drawerId = params.get("drawer");
-  const panelId = params.get("panel");
-  const view = params.get("view");
+  const kind = resolveWindowKind();
 
-  if (view === "dock") return <DockWindow />;
-  if (view === "dock-handle") return <DockHandle />;
-  if (panelId) return <PanelWindow panelId={panelId} />;
+  if (kind === "dock") return <DockWindow />;
+  if (kind === "dock-handle") return <DockHandle />;
+  if (kind === "panel") return <PanelWindow panelId={params.get("panel")!} />;
+  if (kind === "drawer") return <DrawerWindow drawerId={params.get("drawer")!} />;
 
-  return drawerId ? <DrawerWindow drawerId={drawerId} /> : <AdminWindow />;
+  return <AdminWindow />;
 }

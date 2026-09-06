@@ -243,6 +243,8 @@ export function DockWindow() {
 
   const iconPixels = ICON_PIXELS[dock?.iconSize ?? "medium"];
   const background = hexToRgba(dock?.backgroundColor ?? "#10141E", dock?.opacity ?? 0.92);
+  // El menú contextual es "parte de opciones": nunca se vuelve translúcido.
+  const menuBackground = hexToRgba(dock?.backgroundColor ?? "#10141E", 0.98);
   const effectsDisabled = dock?.performanceMode || dock?.animationMode === "disabled";
 
   return (
@@ -252,6 +254,7 @@ export function DockWindow() {
         "--dock-cell": `${iconPixels + CELL_PADDING}px`,
         "--dock-icon": `${iconPixels}px`,
         "--dock-background": background,
+        "--dock-menu-background": menuBackground,
         "--dock-gap": `${dock?.spacing === "compact" ? 4 : dock?.spacing === "wide" ? 14 : 8}px`,
         "--dock-radius": `${dock?.borderRadius ?? 14}px`,
       } as React.CSSProperties}

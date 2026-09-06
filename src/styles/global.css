@@ -1,9 +1,19 @@
 :root {
   font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   color: #eef1f7;
-  background: #0b0d12;
+  /* Sin fondo a propósito. El fondo del documento se propaga al lienzo entero
+     y taparía el escritorio por detrás de cualquier ventana translúcida. Sólo
+     el Administrador pinta fondo, más abajo. */
+  background: transparent;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+}
+
+/* El Administrador es la única ventana sólida: no tiene barra de opacidad.
+   El tipo de ventana lo marca windowKind.ts antes del primer render. */
+html[data-window="admin"],
+html[data-window="admin"] body {
+  background: #0b0d12;
 }
 
 * {
@@ -819,10 +829,9 @@ input[type="range"] {
 
 /* Drawer window */
 
-body:has(.drawer-window),
-body:has(.drawer-fallback),
-body:has(.drawer-window) #root,
-body:has(.drawer-fallback) #root {
+html[data-window="drawer"],
+html[data-window="drawer"] body,
+html[data-window="drawer"] #root {
   min-height: 100vh;
   overflow: hidden;
   background: transparent;
@@ -854,6 +863,7 @@ body:has(.drawer-fallback) #root {
 }
 
 .drawer-header {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
   display: flex;
   height: 48px;
   align-items: center;
@@ -933,6 +943,15 @@ body:has(.drawer-fallback) #root {
   gap: 2px;
 }
 
+/* Botón de volver al nivel anterior: vive junto al nombre, no en una barra
+   aparte dentro del cuerpo. */
+.header-button.back-button {
+  flex: 0 0 auto;
+  margin-right: 2px;
+  font-size: 15px;
+  line-height: 1;
+}
+
 .header-button {
   display: grid;
   width: 31px;
@@ -974,92 +993,6 @@ body:has(.drawer-fallback) #root {
   scrollbar-width: thin;
 }
 
-.drawer-level-toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 8;
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 4px;
-  margin: -4px -4px 9px;
-  padding: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 9px;
-  background: rgba(10, 13, 19, 0.7);
-  backdrop-filter: blur(10px);
-}
-
-.level-back,
-.level-action,
-.drawer-breadcrumbs button {
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.68);
-  cursor: pointer;
-}
-
-.level-back,
-.level-action {
-  display: grid;
-  width: 25px;
-  height: 25px;
-  flex: 0 0 auto;
-  padding: 0;
-  place-items: center;
-}
-
-.level-back {
-  font-size: 22px;
-}
-
-.level-back:disabled {
-  opacity: 0.24;
-  cursor: default;
-}
-
-.level-back:not(:disabled):hover,
-.level-action:hover,
-.drawer-breadcrumbs button:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
-.drawer-breadcrumbs {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  align-items: center;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.drawer-breadcrumbs span {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-}
-
-.drawer-breadcrumbs i {
-  color: rgba(255, 255, 255, 0.28);
-  font-size: 9px;
-  font-style: normal;
-}
-
-.drawer-breadcrumbs button {
-  max-width: 112px;
-  overflow: hidden;
-  padding: 5px 6px;
-  font-size: 9px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.level-action {
-  font-size: 11px;
-}
-
 .level-error {
   margin-bottom: 8px;
   padding: 7px 9px;
@@ -1071,6 +1004,7 @@ body:has(.drawer-fallback) #root {
 }
 
 .drawer-empty-state {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.7);
   display: grid;
   min-height: 100%;
   gap: 8px;
@@ -1180,6 +1114,9 @@ body:has(.drawer-fallback) #root {
 }
 
 .drawer-item-name {
+  /* Con la opacidad al mínimo el nombre queda sobre el escritorio: la sombra
+     lo mantiene legible sin ensuciar el aspecto cuando sí hay fondo. */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 6px rgba(0, 0, 0, 0.6);
   display: -webkit-box;
   width: 100%;
   min-height: 28px;
@@ -1564,12 +1501,12 @@ body:has(.drawer-fallback) #root {
 
 /* Las dos ventanas del Dock son transparentes: el canvas del documento no debe
    pintar el fondo oscuro global, o el recuadro de la ventana se vería opaco. */
-html:has(.dock-shell),
-html:has(.dock-handle-shell),
-body:has(.dock-shell),
-body:has(.dock-handle-shell),
-body:has(.dock-shell) #root,
-body:has(.dock-handle-shell) #root {
+html[data-window="dock"],
+html[data-window="dock"] body,
+html[data-window="dock"] #root,
+html[data-window="dock-handle"],
+html[data-window="dock-handle"] body,
+html[data-window="dock-handle"] #root {
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -1636,6 +1573,7 @@ body:has(.dock-handle-shell) #root {
   --dock-cell: 64px;
   --dock-icon: 48px;
   --dock-background: rgba(16, 20, 30, 0.92);
+  --dock-menu-background: rgba(16, 20, 30, 0.98);
   --dock-gap: 8px;
   --dock-radius: 14px;
   position: fixed;
@@ -1869,7 +1807,9 @@ body:has(.dock-handle-shell) #root {
   align-items: center;
   gap: 8px;
   padding: 0 10px;
-  background: var(--dock-background);
+  /* El menú es "parte de opciones": queda sólido aunque el modo transparente
+     esté activo, o el texto se leería sobre el escritorio. */
+  background: var(--dock-menu-background, rgba(16, 20, 30, 0.98));
   backdrop-filter: none;
   overflow-x: auto;
   overflow-y: hidden;
@@ -2001,12 +1941,9 @@ body:has(.dock-handle-shell) #root {
 
 /* La ventana del Panel es transparente: el canvas del documento no debe pintar
    el fondo oscuro global o se verían esquinas opacas. */
-html:has(.panel-window),
-html:has(.panel-fallback),
-body:has(.panel-window),
-body:has(.panel-fallback),
-body:has(.panel-window) #root,
-body:has(.panel-fallback) #root {
+html[data-window="panel"],
+html[data-window="panel"] body,
+html[data-window="panel"] #root {
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -2053,6 +1990,9 @@ body:has(.panel-fallback) #root {
   height: 34px;
   padding: 0 8px 0 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  /* Fondo propio, independiente de la barra de opacidad: aunque el cuerpo del
+     panel quede invisible, la cabecera sigue visible y se puede agarrar. */
+  background: rgba(8, 10, 15, 0.42);
   /* La cabecera es el agarre para mover: el movimiento lo hace Windows. */
   cursor: grab;
   user-select: none;
@@ -2192,6 +2132,7 @@ body:has(.panel-fallback) #root {
 }
 
 .panel-item-name {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 6px rgba(0, 0, 0, 0.6);
   width: 100%;
   color: #dfe5f2;
   font-size: 11px;
@@ -2230,6 +2171,7 @@ body:has(.panel-fallback) #root {
 }
 
 .panel-empty {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.7);
   display: flex;
   height: 100%;
   flex-direction: column;
@@ -2601,4 +2543,317 @@ html[data-animation-mode="disabled"] *::after {
     transition-duration: 1ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Administrador: secciones ordenadas y desplegables */
+.collapsible-section {
+  max-width: 1080px;
+  margin: 0 auto 10px;
+  overflow: hidden;
+  border: 1px solid #2b3242;
+  border-radius: 12px;
+  background: rgba(16, 20, 28, 0.92);
+}
+
+.collapsible-section[open] {
+  margin-bottom: 16px;
+  border-color: #394258;
+  background: rgba(16, 20, 28, 0.98);
+}
+
+.collapsible-summary {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 48px;
+  gap: 12px;
+  padding: 0 16px;
+  color: #e9edf6;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-summary:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.collapsible-summary:focus-visible {
+  outline: 2px solid #a8baff;
+  outline-offset: -2px;
+}
+
+.collapsible-chevron {
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid #8793aa;
+  border-bottom: 2px solid #8793aa;
+  transform: rotate(-45deg);
+  transition: transform 140ms ease;
+}
+
+.collapsible-section[open] .collapsible-chevron {
+  transform: rotate(45deg) translate(-2px, -2px);
+}
+
+.collapsible-title-group {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  gap: 12px;
+}
+
+.collapsible-title-group strong {
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 680;
+}
+
+.collapsible-title-group small {
+  overflow: hidden;
+  color: #7f899d;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collapsible-meta {
+  color: #8f9bb1;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.collapsible-content {
+  padding: 18px;
+  border-top: 1px solid #2b3242;
+}
+
+.collapsible-content > .create-panel,
+.collapsible-content > .drawers-section,
+.collapsible-content > .dock-settings-panel,
+.collapsible-content > .panels-section {
+  max-width: none;
+  margin-inline: 0;
+}
+
+.collapsible-content > .create-panel {
+  margin-bottom: 20px;
+}
+
+.collapsible-content > .drawers-section,
+.collapsible-content > .panels-section {
+  margin-top: 0;
+}
+
+.collapsible-content > .dock-settings-panel {
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.collapsible-content > .recovery-panel {
+  margin: 0 0 18px;
+}
+
+.settings-section-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: #8f99ac;
+  font-size: 12px;
+}
+
+.settings-grid-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.panel-defaults {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(120px, 0.55fr)) auto auto;
+  align-items: end;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 14px;
+  border: 1px solid #2b3242;
+  border-radius: 12px;
+  background: #11161f;
+}
+
+.panel-defaults > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.panel-defaults > div:first-child .eyebrow {
+  margin-bottom: 2px;
+}
+
+.panel-defaults > div:first-child strong {
+  font-size: 13px;
+}
+
+.panel-defaults > div:first-child small {
+  color: #7f899d;
+  font-size: 10px;
+}
+
+.compact-toggle {
+  display: flex;
+  align-items: center;
+  min-height: 35px;
+  gap: 7px;
+  color: #aeb6c6;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.compact-toggle input {
+  accent-color: #a8baff;
+}
+
+@media (max-width: 760px) {
+  .collapsible-summary {
+    grid-template-columns: 12px minmax(0, 1fr) auto;
+  }
+
+  .collapsible-title-group small {
+    display: none;
+  }
+
+  .collapsible-content {
+    padding: 14px;
+  }
+
+  .panel-defaults {
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+  }
+
+  .panel-defaults > div:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .settings-section-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+/* --- Diálogos del Cajón ----------------------------------------------------
+   Reemplazan a los cuadros de Windows, que mostraban la dirección del servidor
+   y no seguían el estilo de la aplicación. */
+
+.drawer-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  border-radius: 13px;
+  background: rgba(4, 6, 10, 0.62);
+  backdrop-filter: blur(2px);
+}
+
+.drawer-dialog {
+  width: min(300px, 100%);
+  padding: 14px;
+  border: 1px solid #3a4050;
+  border-radius: 12px;
+  background: rgba(17, 20, 27, 0.98);
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.5);
+}
+
+.drawer-dialog.is-danger {
+  border-color: rgba(230, 130, 130, 0.4);
+}
+
+.drawer-dialog-title {
+  margin: 0 0 10px;
+  color: #eef1f7;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.drawer-dialog-label {
+  display: block;
+  margin-bottom: 5px;
+  color: #97a1b5;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.drawer-dialog-message {
+  margin: 0 0 12px;
+  color: #b9c2d4;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.drawer-dialog input {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid #3a4050;
+  border-radius: 8px;
+  background: #0e1119;
+  color: #eef1f7;
+  font-size: 12px;
+}
+
+.drawer-dialog input:focus {
+  border-color: #6d80b8;
+  outline: none;
+}
+
+.drawer-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.drawer-dialog-button {
+  padding: 6px 12px;
+  border: 1px solid #3a4050;
+  border-radius: 8px;
+  background: transparent;
+  color: #cdd5e6;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.drawer-dialog-button:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.drawer-dialog-button.is-primary {
+  border-color: transparent;
+  background: #4d6cc0;
+  color: #f2f5ff;
+}
+
+.drawer-dialog-button.is-primary:hover {
+  background: #5b7bd2;
+}
+
+.drawer-dialog-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.drawer-dialog.is-danger .drawer-dialog-button.is-primary {
+  background: #a8434a;
+}
+
+.drawer-dialog.is-danger .drawer-dialog-button.is-primary:hover {
+  background: #b94f57;
 }

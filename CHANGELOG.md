@@ -1,5 +1,79 @@
 # Changelog
 
+## 1.1.0 — 2026-09-06
+
+### Cambiado
+
+- **Fuera la etiqueta de modo de guardado** (“GUARDADO” / “VINCULADO”) que
+  aparecía fija debajo de cada elemento: ocupaba lugar y no cambiaba ninguna
+  decisión de uso. El nombre del archivo sigue visible.
+- Al guardar algo, el aviso de abajo dice qué entró —con el nombre cuando es
+  un solo elemento— y se borra solo. Si entran varias cosas seguidas, el
+  aviso anterior se reemplaza por el nuevo.
+- Se ocultó el texto explicativo del Cajón vacío (“Arrastrá elementos acá…”).
+  El rombo sigue marcando que está vacío.
+- Se controlan desde `src/features.ts` (`DRAWER_STORAGE_BADGES_VISIBLE`,
+  `DRAWER_EMPTY_HINT_VISIBLE`): nada se borró, alcanza con ponerlos en `true`.
+
+### Cambiado
+
+- **Todo el mando del Cajón vive en su cabecera.** Se eliminó la barra que
+  estaba dentro del cuerpo y repetía el nombre del cajón. El botón de
+  actualizar pasó arriba, junto a contraer y opciones, y al entrar en un nivel
+  la cabecera muestra su nombre con un botón para volver.
+- **Los subcajones quedaron fuera de la vista** (`SUBDRAWERS_ENABLED` en
+  `src/features.ts`). No eran un cajón dentro de otro sino un nivel más de la
+  misma ventana, y para eso conviene crear otro Cajón al lado. El código sigue
+  completo: alcanza con poner esa constante en `true` para recuperarlos, y los
+  subcajones que existan en el disco se siguen abriendo con normalidad.
+
+### Agregado
+
+- **Diálogos propios del Cajón.** Renombrar o quitar un cajón ya no abren el
+  cuadro gris de Windows con la dirección del servidor: usan un cuadro con el
+  estilo de la aplicación, que se cierra con Escape o haciendo clic afuera.
+
+### Cambiado
+
+- **Una sola barra de opacidad por ventana, de fondo invisible a sólido.** La
+  barra de Opacidad de cada Cajón, del Dock y de cada Panel ahora llega hasta
+  cero: al fondo la ventana es sólida, al principio el fondo desaparece y se ve
+  el escritorio. Ya no hay interruptor global ni un segundo nivel que se
+  multiplique con el de cada ventana.
+- Los Paneles dejaron de recortar la opacidad según el estilo de fondo. El
+  estilo describe el aspecto; el valor lo decide la barra.
+- El Administrador no tiene barra de opacidad, así que nunca se vuelve
+  transparente. Los menús de opciones y los ajustes también quedan sólidos.
+
+### Corregido
+
+- **Las puntas en las esquinas de Cajones y Paneles.** Windows acompaña la
+  sombra del sistema con un marco recto de 1 píxel que asomaba por fuera del
+  borde redondeado y dibujaba una esquina cuadrada. Esas dos ventanas se
+  crean ahora sin sombra del sistema, igual que el Dock, que ya no la tenía.
+
+- **El fondo del documento tapaba el escritorio.** El lienzo de todas las
+  ventanas se pintaba con el color oscuro de la aplicación, así que ninguna
+  opacidad podía dejar ver lo que había detrás: el Cajón se veía gris hiciera
+  lo que hiciera la barra. Ahora el fondo sólido lo pinta únicamente el
+  Administrador.
+- Cada ventana se identifica desde el arranque (`data-window` en el documento)
+  en lugar de deducirse del contenido ya renderizado, que era frágil y dejaba
+  ventanas con el fondo equivocado.
+
+### Agregado
+
+- La cabecera de los Paneles conserva su propio fondo: con la opacidad al
+  mínimo la ventana sigue teniendo de dónde agarrarse para moverla.
+- Los nombres de los elementos llevan sombra para leerse sobre el escritorio
+  cuando el fondo está en cero.
+- El Administrador se reorganizó en secciones desplegables: Cajones, Dock,
+  Iconos fijos, Configuración general, Actualizaciones, Backups y Diagnóstico.
+
+### Pruebas
+
+- 52 pruebas Rust, verificación de tipos TypeScript y compilación de producción.
+
 ## 1.0.1 — 2026-09-06
 
 ### Corregido
