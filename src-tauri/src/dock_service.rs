@@ -31,10 +31,6 @@ use tauri::{
 use windows::Win32::{
     Foundation::{HWND, RECT},
     Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow},
-    UI::Shell::{
-        QUNS_BUSY, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN,
-        SHQueryUserNotificationState,
-    },
     UI::WindowsAndMessaging::{
         GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId, IsIconic, IsWindowVisible,
     },
@@ -100,8 +96,7 @@ pub fn start_fullscreen_guard(app: &AppHandle) {
             if watched_app.get_webview_window(DOCK_HANDLE_WINDOW).is_none() {
                 continue;
             }
-            let fullscreen =
-                shell_reports_fullscreen() || foreground_covers_handle_monitor(&watched_app);
+            let fullscreen = foreground_covers_handle_monitor(&watched_app);
             let previous = FOREGROUND_FULLSCREEN.swap(fullscreen, Ordering::SeqCst);
             if previous == fullscreen {
                 continue;
@@ -118,45 +113,26 @@ pub fn start_fullscreen_guard(app: &AppHandle) {
 }
 
 fn sync_taskbar_priority(app: &AppHandle) -> bool {
-    let fullscreen = shell_reports_fullscreen() || foreground_covers_handle_monitor(app);
+    let fullscreen = foreground_covers_handle_monitor(app);
     FOREGROUND_FULLSCREEN.store(fullscreen, Ordering::SeqCst);
     apply_taskbar_priority(app, fullscreen);
     fullscreen
 }
 
-/// Le pregunta a Windows si hay una aplicación ocupando la pantalla completa.
-///
-/// Es exactamente la misma señal que usa el propio Windows para no mostrar
-/// notificaciones encima de un video a pantalla completa, así que reconoce
-/// también los reproductores sin bordes que no coinciden con el rectángulo
-/// exacto del monitor.
-fn shell_reports_fullscreen() -> bool {
-    let Ok(state) = (unsafe { SHQueryUserNotificationState() }) else {
-        return false;
-    };
-    state == QUNS_BUSY || state == QUNS_RUNNING_D3D_FULL_SCREEN || state == QUNS_PRESENTATION_MODE
-}
-
-/// Aplica al Dock la misma jerarquía que la barra de tareas de Windows.
-///
-/// Con una aplicación a pantalla completa la barra de tareas no se ve, y el
-/// tirador tampoco debe verse. Bajarle la prioridad no alcanza —según el
-/// reproductor puede seguir dibujándose encima—, así que directamente se
-/// esconde y vuelve al salir.
+/// Mantiene el tirador siempre disponible, incluso sobre pantalla completa.
+/// La barra completa sigue siendo retráctil, pero la uña nunca se oculta.
 fn apply_taskbar_priority(app: &AppHandle, fullscreen: bool) {
-    for label in [DOCK_WINDOW, DOCK_HANDLE_WINDOW] {
-        if let Some(window) = app.get_webview_window(label) {
-            let _ = window.set_always_on_top(!fullscreen);
-        }
+    if let Some(handle) = app.get_webview_window(DOCK_HANDLE_WINDOW) {
+        let _ = handle.set_always_on_top(true);
+    }
+    if let Some(window) = app.get_webview_window(DOCK_WINDOW) {
+        let _ = window.set_always_on_top(!fullscreen);
     }
 
     if fullscreen {
-        for label in [DOCK_WINDOW, DOCK_HANDLE_WINDOW] {
-            if let Some(window) = app.get_webview_window(label) {
-                let _ = window.hide();
-            }
+        if let Some(window) = app.get_webview_window(DOCK_WINDOW) {
+            let _ = window.hide();
         }
-        return;
     }
 
     let Ok(dock) = app.state::<AppState>().snapshot().map(|state| state.dock) else {
@@ -167,6 +143,9 @@ fn apply_taskbar_priority(app: &AppHandle, fullscreen: bool) {
     }
     if let Some(handle) = app.get_webview_window(DOCK_HANDLE_WINDOW) {
         let _ = handle.show();
+    }
+    if fullscreen {
+        return;
     }
     if dock.visible
         && let Some(window) = app.get_webview_window(DOCK_WINDOW)
@@ -558,6 +537,10 @@ pub fn refresh(app: &AppHandle, dock: &mut DockState, animate_hide: bool) -> Res
     ensure_windows(app, dock)?;
     layout(app, dock)?;
     let fullscreen = sync_taskbar_priority(app);
+    if fullscreen {
+        return Ok(());
+    }
+
 
     if let Some(handle) = app.get_webview_window(DOCK_HANDLE_WINDOW)
         && !handle.is_visible().unwrap_or(false)
