@@ -21,7 +21,10 @@ use crate::{
 };
 
 const LEGACY_STATE_FILE_NAMES: [&str; 2] = ["drawers-state-v2.json", "drawers-state-v1.json"];
-const MAX_BACKUPS: usize = 8;
+/// Se crea una copia en cada guardado, y se guarda ante cualquier cambio
+/// (mover una ventana, cambiar la opacidad, agregar un elemento). Con ocho,
+/// un rato de uso normal borraba toda la historia anterior.
+const MAX_BACKUPS: usize = 40;
 static SAVE_LOCK: Mutex<()> = Mutex::new(());
 
 pub struct PersistenceService;
@@ -209,7 +212,7 @@ impl PersistenceService {
         let paths = StorageService::paths()?;
         let mut result: Vec<BackupInfo> = backup_paths(&paths)?
             .iter()
-            .map(|path| backup_info(path))
+            .filter_map(|path| backup_info_optional(path).transpose())
             .collect::<Result<_, _>>()?;
         result.sort_by_key(|item| std::cmp::Reverse(item.created_at));
         Ok(result)
@@ -386,14 +389,32 @@ impl PersistenceService {
 
     fn prune_backups(paths: &StoragePaths) -> Result<(), String> {
         let mut backups = backup_paths(paths)?;
-        backups.sort_by(|left, right| right.file_name().cmp(&left.file_name()));
+        // Por fecha de modificación, de la más nueva a la más vieja. Ordenar por
+        // nombre retiraba primero las copias cuya versión era menor —el nombre
+        // empieza por el número de versión— y no las más antiguas, así que una
+        // copia reciente podía desaparecer mientras sobrevivía una vieja.
+        backups.sort_by_key(|path| {
+            std::cmp::Reverse(
+                fs::metadata(path)
+                    .and_then(|metadata| metadata.modified())
+                    .ok()
+                    .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+                    .map(|duration| duration.as_millis())
+                    .unwrap_or_default(),
+            )
+        });
         for obsolete in backups.into_iter().skip(MAX_BACKUPS) {
-            fs::remove_file(&obsolete).map_err(|error| {
-                format!(
-                    "El guardado se completó, pero no se pudo retirar la copia antigua {}: {error}",
-                    obsolete.display()
-                )
-            })?;
+            match fs::remove_file(&obsolete) {
+                // Si otra operación ya la retiró, el objetivo está cumplido.
+                Err(error) if error.kind() == ErrorKind::NotFound => {}
+                Err(error) => {
+                    return Err(format!(
+                        "El guardado se completó, pero no se pudo retirar la copia antigua {}: {error}",
+                        obsolete.display()
+                    ));
+                }
+                Ok(()) => {}
+            }
         }
         Ok(())
     }
@@ -550,6 +571,17 @@ fn migrate_step(value: &mut serde_json::Value, from_version: u32) -> Result<(), 
         serde_json::Value::from(from_version + 1),
     );
     Ok(())
+}
+
+/// Devuelve `Ok(None)` cuando la copia ya no existe: la rotacion puede
+/// retirarla entre que se lista la carpeta y se lee el archivo, y eso no debe
+/// tumbar la operacion que este en curso (crear un backup, instalar una
+/// actualizacion o mostrar la lista).
+fn backup_info_optional(path: &Path) -> Result<Option<BackupInfo>, String> {
+    match fs::metadata(path) {
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+        _ => backup_info(path).map(Some),
+    }
 }
 
 fn backup_info(path: &Path) -> Result<BackupInfo, String> {

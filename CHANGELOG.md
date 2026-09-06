@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.1 — 2026-09-06
+
+### Corregido
+
+- **La rotación de copias de seguridad borraba la que no correspondía.** Ordenaba
+  los archivos por nombre y el nombre empieza por el número de versión, así que
+  retiraba primero las copias de la versión más baja aunque fueran recientes, en
+  lugar de las más antiguas. Ahora ordena por fecha real.
+- **Una copia faltante ya no hace fallar la operación entera.** Si la rotación
+  retira un archivo entre que se lista la carpeta y se lee, se omite en vez de
+  cortar el listado, la creación de un backup o la instalación de una
+  actualización. Ese era el motivo del error “No se pudo leer … (os error 2)” al
+  actualizar.
+- El límite de copias sube de 8 a 40. Se crea una copia en cada guardado y se
+  guarda ante cualquier cambio —mover una ventana, cambiar la opacidad—, así que
+  con ocho un rato de uso normal borraba toda la historia anterior.
+
 ## 1.1.0 — 2026-09-06
 
 ### Cambiado
