@@ -32,7 +32,8 @@ use windows::Win32::{
     Foundation::{HWND, RECT},
     Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow},
     UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId, IsIconic, IsWindowVisible,
+        GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId, IsIconic,
+        IsWindowVisible,
     },
 };
 
@@ -69,6 +70,23 @@ static VISIBILITY_EPOCH: AtomicU64 = AtomicU64::new(0);
 /// crear las ventanas desde otro hilo al mismo tiempo que el arranque, y la
 /// aplicación quedaba trabada con ventanas duplicadas y sin posicionar.
 static WINDOWS_READY: AtomicBool = AtomicBool::new(false);
+
+/// Ventanas del propio Windows que ocupan el monitor entero por definición y
+/// que no son una aplicación a pantalla completa: el escritorio, sus iconos,
+/// las barras de tareas y los conmutadores de ventanas. Tratarlas como
+/// fullscreen escondía el Dock cada vez que el usuario hacía clic en el
+/// escritorio, y el estado quedaba diciendo que seguía abierto.
+const SHELL_WINDOW_CLASSES: [&str; 9] = [
+    "Progman",
+    "WorkerW",
+    "SHELLDLL_DefView",
+    "SysListView32",
+    "Shell_TrayWnd",
+    "Shell_SecondaryTrayWnd",
+    "ForegroundStaging",
+    "MultitaskingViewFrame",
+    "XamlExplorerHostIslandWindow",
+];
 
 /// Un solo observador de pantalla completa por proceso.
 static FULLSCREEN_GUARD_STARTED: AtomicBool = AtomicBool::new(false);
@@ -119,6 +137,29 @@ fn sync_taskbar_priority(app: &AppHandle) -> bool {
     fullscreen
 }
 
+/// Esconder la barra por pantalla completa la deja cerrada de verdad.
+///
+/// Antes sólo se ocultaba la ventana y el estado seguía diciendo `visible`, así
+/// que el siguiente cambio de ventana la volvía a abrir sola. El Dock ahora se
+/// abre únicamente cuando alguien lo pide: el tirador, el atajo, la bandeja o
+/// el Administrador.
+fn mark_closed_by_fullscreen(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let Ok(snapshot) = state.snapshot() else {
+        return;
+    };
+    if !snapshot.dock.visible {
+        return;
+    }
+    let Ok(updated) = state.update(|app_state| {
+        app_state.dock.visible = false;
+        Ok(())
+    }) else {
+        return;
+    };
+    let _ = crate::dock_commands::emit_dock(app, &updated.dock);
+}
+
 /// Mantiene el tirador siempre disponible, incluso sobre pantalla completa.
 /// La barra completa sigue siendo retráctil, pero la uña nunca se oculta.
 fn apply_taskbar_priority(app: &AppHandle, fullscreen: bool) {
@@ -133,6 +174,7 @@ fn apply_taskbar_priority(app: &AppHandle, fullscreen: bool) {
         if let Some(window) = app.get_webview_window(DOCK_WINDOW) {
             let _ = window.hide();
         }
+        mark_closed_by_fullscreen(app);
     }
 
     let Ok(dock) = app.state::<AppState>().snapshot().map(|state| state.dock) else {
@@ -144,14 +186,24 @@ fn apply_taskbar_priority(app: &AppHandle, fullscreen: bool) {
     if let Some(handle) = app.get_webview_window(DOCK_HANDLE_WINDOW) {
         let _ = handle.show();
     }
-    if fullscreen {
-        return;
+    // La barra nunca se vuelve a mostrar sola: salir de pantalla completa
+    // devuelve el tirador, no el Dock abierto.
+}
+
+/// Nombre de clase de una ventana, vacío si Windows no lo entrega.
+fn window_class_name(window: HWND) -> String {
+    let mut buffer = [0_u16; 256];
+    let length = unsafe { GetClassNameW(window, &mut buffer) };
+    if length <= 0 {
+        return String::new();
     }
-    if dock.visible
-        && let Some(window) = app.get_webview_window(DOCK_WINDOW)
-    {
-        let _ = window.show();
-    }
+    String::from_utf16_lossy(&buffer[..length as usize])
+}
+
+fn is_shell_class(class_name: &str) -> bool {
+    SHELL_WINDOW_CLASSES
+        .iter()
+        .any(|shell| shell.eq_ignore_ascii_case(class_name))
 }
 
 fn foreground_covers_handle_monitor(app: &AppHandle) -> bool {
@@ -173,6 +225,12 @@ fn foreground_covers_handle_monitor(app: &AppHandle) -> bool {
     let mut foreground_process = 0_u32;
     unsafe { GetWindowThreadProcessId(foreground, Some(&mut foreground_process)) };
     if foreground_process == std::process::id() {
+        return false;
+    }
+    // El escritorio (`Progman`) mide exactamente lo que el monitor: sin este
+    // filtro, cada clic sobre el fondo del escritorio contaba como pantalla
+    // completa.
+    if is_shell_class(&window_class_name(foreground)) {
         return false;
     }
 
@@ -538,6 +596,9 @@ pub fn refresh(app: &AppHandle, dock: &mut DockState, animate_hide: bool) -> Res
     layout(app, dock)?;
     let fullscreen = sync_taskbar_priority(app);
     if fullscreen {
+        // Con una aplicación a pantalla completa delante la barra no se ve, así
+        // que el estado también tiene que decir que está cerrada.
+        dock.visible = false;
         return Ok(());
     }
 
@@ -600,7 +661,7 @@ pub fn relayout(app: &AppHandle, dock: &mut DockState) -> Result<(), String> {
 mod tests {
     use std::path::PathBuf;
 
-    use super::{aligned_dock_x, logical_size, rect_covers_monitor};
+    use super::{aligned_dock_x, is_shell_class, logical_size, rect_covers_monitor};
     use crate::model::{DockItem, DockItemKind, DockState, DockWidthMode, DrawerItemType};
     use windows::Win32::Foundation::RECT;
 
@@ -722,5 +783,19 @@ mod tests {
             bottom: 1080,
         };
         assert!(rect_covers_monitor(window, monitor));
+    }
+
+    #[test]
+    fn desktop_and_taskbar_are_never_fullscreen_applications() {
+        assert!(is_shell_class("Progman"));
+        assert!(is_shell_class("WorkerW"));
+        assert!(is_shell_class("Shell_TrayWnd"));
+        assert!(is_shell_class("SHELLDLL_DefView"));
+    }
+
+    #[test]
+    fn a_real_application_is_still_fullscreen() {
+        assert!(!is_shell_class("Chrome_WidgetWin_1"));
+        assert!(!is_shell_class("UnityWndClass"));
     }
 }

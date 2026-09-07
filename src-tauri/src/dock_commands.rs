@@ -52,7 +52,7 @@ fn validate_caller(window: &WebviewWindow, allow_admin: bool) -> Result<(), Stri
     }
 }
 
-fn emit_dock(app: &AppHandle, dock: &DockState) -> Result<(), String> {
+pub(crate) fn emit_dock(app: &AppHandle, dock: &DockState) -> Result<(), String> {
     app.emit(DOCK_CHANGED_EVENT, dock)
         .map_err(|error| format!("No se pudo sincronizar el Dock entre ventanas: {error}"))
 }

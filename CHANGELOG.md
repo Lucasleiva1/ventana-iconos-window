@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.1.3 — 2026-09-06
+
+### Corregido
+
+- **El Dock se abría solo.** Alcanzaba con hacer clic en el escritorio y después
+  en cualquier otra cosa —un Cajón, una ventana— para que la barra apareciera
+  sin que nadie la abriera. El vigilante que baja el Dock cuando hay una
+  aplicación a pantalla completa reconocía ese caso midiendo si la ventana de
+  adelante ocupaba todo el monitor, y **el escritorio de Windows ocupa todo el
+  monitor**: al hacer clic en el fondo del escritorio pasa al frente `Progman`,
+  con el rectángulo exacto de la pantalla. El Dock lo contaba como pantalla
+  completa, escondía la barra y volvía a mostrarla al dejar de serlo.
+  Ahora el escritorio, sus iconos, las barras de tareas y el Alt+Tab no cuentan
+  como aplicación a pantalla completa.
+- **Esconder la barra ya no la deja "abierta" por dentro.** Cuando el vigilante
+  la bajaba, sólo ocultaba la ventana: el estado seguía diciendo que estaba
+  abierta, así que el siguiente cambio de ventana la resucitaba. De paso, ese
+  desfasaje hacía que a veces un clic en el tirador no abriera nada, porque el
+  programa creía que ya estaba abierto y ese clic lo "cerraba".
+- **La barra no vuelve nunca sola.** Salir de un video a pantalla completa
+  devuelve el tirador, no el Dock desplegado. El Dock se abre únicamente cuando
+  se lo pide: el tirador, el atajo de teclado, el menú de la bandeja o el
+  Administrador.
+
+El tirador no cambió: sigue siempre visible, como desde la 1.1.2.
+
 ## 1.1.1 — 2026-09-06
 
 ### Corregido
