@@ -8,7 +8,8 @@ pub const DEFAULT_DRAWER_WIDTH: f64 = 460.0;
 pub const DEFAULT_DRAWER_HEIGHT: f64 = 300.0;
 pub const COLLAPSED_HEIGHT: f64 = 48.0;
 pub const MIN_DRAWER_WIDTH: f64 = 260.0;
-pub const MIN_DRAWER_HEIGHT: f64 = 120.0;
+/// Fits the header, a large thumbnail, and two lines of item name.
+pub const MIN_DRAWER_HEIGHT: f64 = 194.0;
 /// La opacidad del fondo baja hasta cero: la barra va de fondo invisible a
 /// fondo sólido. La cabecera conserva su propio fondo para poder arrastrar.
 pub const MIN_OPACITY: f64 = 0.0;
@@ -74,6 +75,14 @@ pub enum DockWidthMode {
     #[default]
     Automatic,
     Manual,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DockOverflowMode {
+    #[default]
+    Arrows,
+    Fit,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -287,6 +296,8 @@ pub struct DockState {
     pub animation_mode: DockAnimationMode,
     #[serde(default)]
     pub width_mode: DockWidthMode,
+    #[serde(default)]
+    pub overflow_mode: DockOverflowMode,
     #[serde(default = "default_manual_width")]
     pub manual_width: f64,
     #[serde(default)]
@@ -333,6 +344,7 @@ impl Default for DockState {
             performance_mode: false,
             animation_mode: DockAnimationMode::default(),
             width_mode: DockWidthMode::default(),
+            overflow_mode: DockOverflowMode::default(),
             manual_width: default_manual_width(),
             spacing: DockSpacing::default(),
             handle_width: default_handle_width(),
@@ -365,6 +377,7 @@ pub struct DockPatch {
     pub performance_mode: Option<bool>,
     pub animation_mode: Option<DockAnimationMode>,
     pub width_mode: Option<DockWidthMode>,
+    pub overflow_mode: Option<DockOverflowMode>,
     pub manual_width: Option<f64>,
     pub spacing: Option<DockSpacing>,
     pub handle_width: Option<f64>,

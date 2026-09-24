@@ -41,7 +41,8 @@ use crate::{
     model::{
         DOCK_CELL_PADDING, DOCK_HANDLE_GAP, DOCK_HANDLE_HEIGHT, DOCK_HANDLE_WIDTH,
         DOCK_MIN_MANUAL_WIDTH, DOCK_MIN_WIDTH, DOCK_PADDING_X, DOCK_PADDING_Y, DOCK_SIDE_MARGIN,
-        DockAnimationMode, DockHandlePosition, DockItemKind, DockState, DockWidthMode,
+        DockAnimationMode, DockHandlePosition, DockItemKind, DockOverflowMode, DockState,
+        DockWidthMode,
     },
     monitor_service::monitor_id,
     state::AppState,
@@ -265,7 +266,6 @@ fn rect_covers_monitor(window: RECT, monitor: RECT) -> bool {
 /// Tamaño lógico del Dock: crece con el contenido hasta el ancho disponible.
 pub fn logical_size(dock: &DockState, maximum_width: f64) -> (f64, f64) {
     let cell = dock.icon_size.dock_pixels() + DOCK_CELL_PADDING;
-    let height = cell + DOCK_PADDING_Y * 2.0;
     let item_widths: Vec<f64> = dock
         .items
         .iter()
@@ -286,7 +286,17 @@ pub fn logical_size(dock: &DockState, maximum_width: f64) -> (f64, f64) {
         DockWidthMode::Manual => dock.manual_width.max(DOCK_MIN_MANUAL_WIDTH),
     }
     .min(cap);
-    (width, height)
+    let scale = dock_content_scale(dock, width, content);
+    (width, cell * scale + DOCK_PADDING_Y * 2.0)
+}
+
+fn dock_content_scale(dock: &DockState, width: f64, content: f64) -> f64 {
+    if dock.overflow_mode != DockOverflowMode::Fit || content <= 0.0 {
+        return 1.0;
+    }
+    let available = (width - DOCK_PADDING_X * 2.0 - 2.0).max(0.0);
+    let minimum = 20.0 / dock.icon_size.dock_pixels();
+    (available / content).clamp(minimum, 1.0)
 }
 
 fn reference_window(app: &AppHandle) -> Option<WebviewWindow> {
@@ -662,7 +672,9 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{aligned_dock_x, is_shell_class, logical_size, rect_covers_monitor};
-    use crate::model::{DockItem, DockItemKind, DockState, DockWidthMode, DrawerItemType};
+    use crate::model::{
+        DockItem, DockItemKind, DockOverflowMode, DockState, DockWidthMode, DrawerItemType,
+    };
     use windows::Win32::Foundation::RECT;
 
     fn item(index: u32, kind: DockItemKind) -> DockItem {
@@ -691,6 +703,26 @@ mod tests {
         let (width, _) = logical_size(&dock, 1180.0);
 
         assert_eq!(width, 1180.0);
+    }
+
+    #[test]
+    fn fit_mode_shrinks_the_dock_until_icons_reach_twenty_pixels() {
+        let mut dock = DockState {
+            overflow_mode: DockOverflowMode::Fit,
+            items: (0..20)
+                .map(|index| item(index, DockItemKind::Shortcut))
+                .collect(),
+            ..DockState::default()
+        };
+        let (_, fitted_height) = logical_size(&dock, 800.0);
+        assert!(fitted_height < 84.0);
+        assert!(fitted_height > 20.0 + 20.0);
+
+        dock.items = (0..300)
+            .map(|index| item(index, DockItemKind::Shortcut))
+            .collect();
+        let (_, minimum_height) = logical_size(&dock, 800.0);
+        assert_eq!(minimum_height, (48.0 + 16.0) * (20.0 / 48.0) + 20.0);
     }
 
     #[test]

@@ -10,6 +10,8 @@ use std::{
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use tauri::{AppHandle, Manager};
+
+use crate::storage_service::atomic_replace;
 use windows::{
     Win32::{
         Foundation::{RPC_E_CHANGED_MODE, SIZE},
@@ -20,7 +22,7 @@ use windows::{
         System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize, IBindCtx},
         UI::Shell::{
             IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF_BIGGERSIZEOK,
-            SIIGBF_ICONONLY,
+            SIIGBF_ICONONLY, SIIGBF_THUMBNAILONLY,
         },
     },
     core::PCWSTR,
@@ -48,8 +50,14 @@ impl IconService {
     }
 
     pub fn ensure(app: &AppHandle, path: &Path, icon_key: &str) -> Result<Option<PathBuf>, String> {
-        let destination = Self::cache_path(app, icon_key)?;
-        if destination.is_file() {
+        let preview = is_image_file(path);
+        let cache_key = if preview {
+            format!("{icon_key}-preview")
+        } else {
+            icon_key.to_owned()
+        };
+        let destination = Self::cache_path(app, &cache_key)?;
+        if destination.is_file() && (!preview || !image_is_newer(path, &destination)) {
             return Ok(Some(destination));
         }
 
@@ -62,15 +70,18 @@ impl IconService {
 
         match extract_windows_icon(path, &temporary) {
             Ok(()) => {
-                if destination.exists() {
+                if preview && destination.exists() {
+                    if let Err(error) = atomic_replace(&temporary, &destination) {
+                        let _ = fs::remove_file(&temporary);
+                        return Err(error);
+                    }
+                } else if destination.exists() {
                     let _ = fs::remove_file(&temporary);
-                } else {
-                    if let Err(error) = fs::rename(&temporary, &destination) {
-                        if destination.exists() {
-                            let _ = fs::remove_file(&temporary);
-                        } else {
-                            return Err(format!("No se pudo guardar el icono en caché: {error}"));
-                        }
+                } else if let Err(error) = fs::rename(&temporary, &destination) {
+                    if destination.exists() {
+                        let _ = fs::remove_file(&temporary);
+                    } else {
+                        return Err(format!("No se pudo guardar el icono en caché: {error}"));
                     }
                 }
                 Ok(Some(destination))
@@ -165,7 +176,11 @@ fn prune_cache_directory(
     cached.sort_by_key(|(_, _, modified)| *modified);
     let mut remaining = cached.len();
     for (path, key, modified) in cached {
-        if retained_keys.contains(&key) {
+        if retained_keys.contains(&key)
+            || key
+                .strip_suffix("-preview")
+                .is_some_and(|base| retained_keys.contains(base))
+        {
             continue;
         }
         let expired = SystemTime::now()
@@ -176,6 +191,37 @@ fn prune_cache_directory(
         }
     }
     Ok(())
+}
+
+fn is_image_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "png"
+                    | "jpg"
+                    | "jpeg"
+                    | "gif"
+                    | "bmp"
+                    | "webp"
+                    | "tif"
+                    | "tiff"
+                    | "heic"
+                    | "heif"
+                    | "avif"
+            )
+        })
+}
+
+fn image_is_newer(source: &Path, cached: &Path) -> bool {
+    match (fs::metadata(source), fs::metadata(cached)) {
+        (Ok(source), Ok(cached)) => match (source.modified(), cached.modified()) {
+            (Ok(source), Ok(cached)) => source > cached,
+            _ => true,
+        },
+        _ => true,
+    }
 }
 
 fn extract_windows_icon(path: &Path, destination: &Path) -> Result<(), String> {
@@ -192,16 +238,19 @@ fn extract_windows_icon(path: &Path, destination: &Path) -> Result<(), String> {
         let factory: IShellItemImageFactory =
             unsafe { SHCreateItemFromParsingName(PCWSTR(wide_path.as_ptr()), None::<&IBindCtx>) }
                 .map_err(|error| format!("Windows Shell no encontró el elemento: {error}"))?;
-        let bitmap = unsafe {
-            factory.GetImage(
-                SIZE {
-                    cx: ICON_EDGE,
-                    cy: ICON_EDGE,
-                },
-                SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK,
+        let size = SIZE {
+            cx: ICON_EDGE,
+            cy: ICON_EDGE,
+        };
+        let thumbnail = is_image_file(path);
+        let bitmap = if thumbnail {
+            unsafe { factory.GetImage(size, SIIGBF_THUMBNAILONLY | SIIGBF_BIGGERSIZEOK) }.or_else(
+                |_| unsafe { factory.GetImage(size, SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK) },
             )
+        } else {
+            unsafe { factory.GetImage(size, SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK) }
         }
-        .map_err(|error| format!("Windows Shell no entregó un icono: {error}"))?;
+        .map_err(|error| format!("Windows Shell no entregó una vista previa: {error}"))?;
 
         let mut bitmap_info = BITMAP::default();
         let object_size = i32::try_from(size_of::<BITMAP>())
@@ -301,7 +350,7 @@ fn extract_windows_icon(path: &Path, destination: &Path) -> Result<(), String> {
 mod tests {
     use std::{collections::HashSet, fs};
 
-    use super::{extract_windows_icon, prune_cache_directory};
+    use super::{extract_windows_icon, is_image_file, prune_cache_directory};
     use uuid::Uuid;
 
     #[test]
@@ -318,6 +367,37 @@ mod tests {
         assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
 
         fs::remove_file(destination).expect("test icon should be removed");
+    }
+
+    #[test]
+    fn image_files_receive_a_real_thumbnail() {
+        let source =
+            std::env::temp_dir().join(format!("desktop-organizer-image-{}.png", Uuid::new_v4()));
+        let destination = source.with_extension("preview.png");
+        let pixels = vec![240_u8, 20, 170, 255].repeat(256 * 256);
+        {
+            let file = fs::File::create(&source).expect("source image should be writable");
+            let mut encoder = png::Encoder::new(file, 256, 256);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            let mut writer = encoder.write_header().expect("PNG header");
+            writer.write_image_data(&pixels).expect("PNG pixels");
+        }
+        assert!(is_image_file(&source));
+        extract_windows_icon(&source, &destination)
+            .expect("Windows should provide the image thumbnail");
+        let mut decoder = png::Decoder::new(fs::File::open(&destination).expect("preview"));
+        decoder.set_transformations(png::Transformations::normalize_to_color8());
+        let mut reader = decoder.read_info().expect("preview header");
+        let mut output = vec![0; reader.output_buffer_size()];
+        let info = reader.next_frame(&mut output).expect("preview pixels");
+        let center = ((info.height / 2 * info.width + info.width / 2) * 4) as usize;
+        assert!(
+            output[center] > 180 && output[center + 1] < 100 && output[center + 2] > 110,
+            "the center should show the magenta source image"
+        );
+        fs::remove_file(source).expect("remove source");
+        fs::remove_file(destination).expect("remove preview");
     }
 
     #[test]

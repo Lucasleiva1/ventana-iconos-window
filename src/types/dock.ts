@@ -29,6 +29,7 @@ export interface DockState {
   performanceMode: boolean;
   animationMode: "normal" | "reduced" | "disabled";
   widthMode: "automatic" | "manual";
+  overflowMode: "arrows" | "fit";
   manualWidth: number;
   spacing: "compact" | "normal" | "wide";
   handleWidth: number;
@@ -57,6 +58,7 @@ export interface DockPatch {
   performanceMode?: boolean;
   animationMode?: DockState["animationMode"];
   widthMode?: DockState["widthMode"];
+  overflowMode?: DockState["overflowMode"];
   manualWidth?: number;
   spacing?: DockState["spacing"];
   handleWidth?: number;

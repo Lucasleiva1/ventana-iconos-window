@@ -288,6 +288,9 @@ pub fn update_dock_settings(
         if let Some(width_mode) = patch.width_mode {
             dock.width_mode = width_mode;
         }
+        if let Some(overflow_mode) = patch.overflow_mode {
+            dock.overflow_mode = overflow_mode;
+        }
         if let Some(width) = patch.manual_width {
             ensure_finite(width, "ancho manual")?;
             dock.manual_width = width.clamp(DOCK_MIN_MANUAL_WIDTH, DOCK_MAX_MANUAL_WIDTH);

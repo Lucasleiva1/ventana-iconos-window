@@ -106,6 +106,20 @@ export function DockSettings({ monitors, onError, onMessage }: DockSettingsProps
           </select>
         </label>
 
+        <label className="preference-row">
+          <span>
+            <strong>Cuando no entran los iconos</strong>
+            <small>Ajustar reduce iconos y espacios hasta 20 px; después permite desplazarse con flechas.</small>
+          </span>
+          <select value={dock?.overflowMode ?? "arrows"} disabled={!dock}
+            onChange={(event) => void run(async () => setDock(await dockApi.updateSettings({
+              overflowMode: event.target.value as DockState["overflowMode"],
+            })), "Modo de iconos guardado.")}>
+            <option value="arrows">Mostrar flechas</option>
+            <option value="fit">Ajustar iconos</option>
+          </select>
+        </label>
+
         {dock?.widthMode === "manual" && (
           <label className="preference-row">
             <span><strong>Ancho manual</strong><small>{Math.round(dock.manualWidth)} px lógicos</small></span>

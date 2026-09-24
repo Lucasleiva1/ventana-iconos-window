@@ -79,7 +79,7 @@ export function DockWindow() {
     for (const child of strip.children) observer.observe(child);
     updateScrollState();
     return () => observer.disconnect();
-  }, [dock?.width, dock?.spacing, dock?.iconSize, dock?.items.length]);
+  }, [dock?.width, dock?.spacing, dock?.iconSize, dock?.overflowMode, dock?.items.length]);
 
   // Sin vigilantes en segundo plano: la disponibilidad se revisa al abrirse.
   useEffect(() => {
@@ -242,6 +242,12 @@ export function DockWindow() {
   }
 
   const iconPixels = ICON_PIXELS[dock?.iconSize ?? "medium"];
+  const gap = dock?.spacing === "compact" ? 4 : dock?.spacing === "wide" ? 14 : 8;
+  const contentWidth = items.reduce((sum, item) => sum + (item.kind === "separator" ? 12 : iconPixels + CELL_PADDING), 0)
+    + Math.max(0, items.length - 1) * gap;
+  const fitScale = dock?.overflowMode === "fit" && contentWidth > 0
+    ? Math.max(20 / iconPixels, Math.min(1, ((dock.width || 360) - 26) / contentWidth))
+    : 1;
   const background = hexToRgba(dock?.backgroundColor ?? "#10141E", dock?.opacity ?? 0.92);
   // El menú contextual es "parte de opciones": nunca se vuelve translúcido.
   const menuBackground = hexToRgba(dock?.backgroundColor ?? "#10141E", 0.98);
@@ -251,11 +257,12 @@ export function DockWindow() {
     <div
       className={`dock-shell ${dock?.visible ? "is-visible" : ""} ${dock?.blur && !dock.performanceMode ? "has-blur" : ""} ${dock?.performanceMode ? "is-performance" : ""} animation-${dock?.animationMode ?? "normal"}`}
       style={{
-        "--dock-cell": `${iconPixels + CELL_PADDING}px`,
-        "--dock-icon": `${iconPixels}px`,
+        "--dock-cell": `${(iconPixels + CELL_PADDING) * fitScale}px`,
+        "--dock-icon": `${iconPixels * fitScale}px`,
         "--dock-background": background,
         "--dock-menu-background": menuBackground,
-        "--dock-gap": `${dock?.spacing === "compact" ? 4 : dock?.spacing === "wide" ? 14 : 8}px`,
+        "--dock-gap": `${gap * fitScale}px`,
+        "--dock-separator": `${12 * fitScale}px`,
         "--dock-radius": `${dock?.borderRadius ?? 14}px`,
       } as React.CSSProperties}
     >

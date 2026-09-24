@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.4 — 2026-09-24
+
+### Mejorado
+
+- El Dock permite elegir entre flechas y ajuste automático de iconos cuando se llena.
+- Los Cajones muestran miniaturas de imágenes, nombres más legibles y una altura mínima que deja ver ambos.
+
 ## 1.1.3 — 2026-09-06
 
 ### Corregido
