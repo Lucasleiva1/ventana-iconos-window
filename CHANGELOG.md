@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.5 — 2026-11-20
+
+- Nueva opción «Eliminar del Dock» en el menú de clic derecho. Elimina sólo el acceso y conserva los archivos reales.
+
 ## 1.1.4 — 2026-09-24
 
 ### Mejorado

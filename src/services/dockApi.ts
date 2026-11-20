@@ -20,6 +20,7 @@ export const dockApi = {
   addItems: (paths: string[]) => invoke<DockAddResult>("add_dock_items", { paths }),
   addSeparator: () => invoke<DockState>("add_dock_separator"),
   removeItem: (itemId: string) => invoke<DockState>("remove_dock_item", { itemId }),
+  deleteShortcut: (itemId: string) => invoke<DockState>("remove_dock_item", { itemId, deleteShortcut: true }),
   renameItem: (itemId: string, name: string) =>
     invoke<DockState>("rename_dock_item", { itemId, name }),
   repairItem: (itemId: string) => invoke<DockState>("repair_dock_item", { itemId }),

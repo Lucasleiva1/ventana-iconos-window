@@ -358,6 +358,16 @@ export function DockWindow() {
                 </button>
               )}
             </>}
+            {menuItem.kind !== "separator" && (
+              <button type="button" role="menuitem" className="dock-menu-remove" onClick={() => void runMenuAction(async () => {
+                const next = await dockApi.deleteShortcut(menuItem.id);
+                dockApi.forgetIcon(menuItem.iconKey);
+                setDock(next);
+                showToast("Acceso eliminado del Dock.");
+              })}>
+                Eliminar del Dock
+              </button>
+            )}
             <button type="button" role="menuitem" className="dock-menu-remove" onClick={() => void runMenuAction(async () => {
               const next = await dockApi.removeItem(menuItem.id);
               dockApi.forgetIcon(menuItem.iconKey);

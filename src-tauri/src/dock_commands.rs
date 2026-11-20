@@ -465,6 +465,7 @@ pub fn add_dock_items(
 #[tauri::command]
 pub fn remove_dock_item(
     item_id: String,
+    delete_shortcut: Option<bool>,
     window: WebviewWindow,
     app: AppHandle,
     state: State<'_, AppState>,
@@ -472,7 +473,11 @@ pub fn remove_dock_item(
     validate_caller(&window, false)?;
     let current = dock_item(&state.snapshot()?, &item_id)?;
     let storage = StorageService::paths()?;
-    dock_repository::restore_to_desktop(&current, &storage)?;
+    if delete_shortcut.unwrap_or(false) {
+        dock_repository::delete_shortcut(&current, &storage)?;
+    } else {
+        dock_repository::restore_to_desktop(&current, &storage)?;
+    }
     let dock = apply(&app, &state, false, move |dock| {
         let before = dock.items.len();
         dock.items.retain(|item| item.id != item_id);

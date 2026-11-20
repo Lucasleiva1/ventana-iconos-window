@@ -242,6 +242,41 @@ pub fn materialize(
     Ok(destination)
 }
 
+/// Quita sólo el acceso. Los archivos reales se conservan fuera del Dock.
+pub fn delete_shortcut(item: &DockItem, paths: &StoragePaths) -> Result<(), String> {
+    if item.kind == DockItemKind::Separator || !is_direct_dock_entry(&item.path, paths) {
+        return Ok(());
+    }
+    let metadata = match fs::symlink_metadata(&item.path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(format!("No se pudo leer el acceso: {error}")),
+    };
+    let extension = item
+        .path
+        .extension()
+        .and_then(OsStr::to_str)
+        .unwrap_or_default();
+    if metadata.is_file()
+        && (extension.eq_ignore_ascii_case("lnk") || extension.eq_ignore_ascii_case("url"))
+    {
+        fs::remove_file(&item.path)
+            .map_err(|error| format!("No se pudo eliminar el acceso del Dock: {error}"))?;
+    } else {
+        // Un archivo/carpeta del Escritorio puede ser el original, no un acceso.
+        let preserved = paths.root.join("Dock - Elementos quitados");
+        fs::create_dir_all(&preserved)
+            .map_err(|error| format!("No se pudo conservar el archivo: {error}"))?;
+        let destination = preserved.join(format!(
+            "{}-{}",
+            Uuid::new_v4(),
+            item.path.file_name().unwrap_or_default().to_string_lossy()
+        ));
+        StorageService::move_safely(&item.path, &destination)?;
+    }
+    Ok(())
+}
+
 pub fn restore_to_desktop(item: &DockItem, paths: &StoragePaths) -> Result<(), String> {
     if item.kind == DockItemKind::Separator || !item.path.exists() {
         return Ok(());
@@ -476,6 +511,47 @@ mod tests {
             master_save: app_root.join("desktop-organizer-save.json"),
             root: app_root,
         }
+    }
+
+    #[test]
+    fn removing_shortcuts_preserves_targets_and_survives_refresh() {
+        let root = std::env::temp_dir().join(format!("dock-remove-{}", Uuid::new_v4()));
+        let paths = fixture_paths(&root);
+        StorageService::ensure_layout(&paths).expect("layout");
+        let target = root.join("original.txt");
+        fs::write(&target, b"original").expect("target");
+        let shortcut = materialize(&target, "Original", &paths).expect("shortcut");
+        let mut dock = DockState::default();
+        sync_dock(&mut dock, &paths, 1).expect("sync");
+        super::delete_shortcut(&dock.items[0], &paths).expect("remove");
+        dock.items.clear();
+        write_metadata(&dock, &paths).expect("persist");
+        sync_dock(&mut dock, &paths, 2).expect("refresh");
+        assert!(dock.items.is_empty());
+        assert!(!shortcut.exists());
+        assert_eq!(fs::read(target).expect("target survives"), b"original");
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn removing_real_files_preserves_contents_outside_dock() {
+        let root = std::env::temp_dir().join(format!("dock-remove-{}", Uuid::new_v4()));
+        let paths = fixture_paths(&root);
+        StorageService::ensure_layout(&paths).expect("layout");
+        fs::write(paths.dock.join("original.txt"), b"important").expect("file");
+        let mut dock = DockState::default();
+        sync_dock(&mut dock, &paths, 1).expect("sync");
+        super::delete_shortcut(&dock.items[0], &paths).expect("remove");
+        let preserved = fs::read_dir(paths.root.join("Dock - Elementos quitados"))
+            .expect("preserved folder")
+            .next()
+            .expect("entry")
+            .expect("file")
+            .path();
+        assert_eq!(fs::read(preserved).expect("contents"), b"important");
+        sync_dock(&mut dock, &paths, 2).expect("refresh");
+        assert!(dock.items.is_empty());
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
